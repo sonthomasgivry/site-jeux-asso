@@ -92,10 +92,14 @@ btnSuggerer.addEventListener('click', async () => {
     btnSuggerer.innerText = 'Recherche sur BGG...';
 
     try {
-        // 1. Recherche BGG DEPUIS LE NAVIGATEUR (contourne les sécurités serveurs)
-        const searchUrl = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
-        const searchRes = await fetch(searchUrl);
-        const searchXml = await searchRes.text();
+        // L'astuce anti-CORS : on passe par un relais gratuit (AllOrigins)
+        // qui enveloppe la réponse de BGG dans un format autorisé par ton navigateur.
+        const urlRecherche = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
+        const proxySearchUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlRecherche)}`;
+        
+        const searchRes = await fetch(proxySearchUrl);
+        const searchData = await searchRes.json();
+        const searchXml = searchData.contents; // Le vrai texte de BGG est caché ici !
         
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
         if (!idMatch) {
@@ -106,10 +110,13 @@ btnSuggerer.addEventListener('click', async () => {
         }
         const gameId = idMatch[1];
 
-        // 2. Récupération des détails BGG
-        const thingUrl = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
-        const thingRes = await fetch(thingUrl);
-        const thingXml = await thingRes.text();
+        // 2. Récupération des détails BGG via le même relais
+        const urlDetails = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
+        const proxyDetailsUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlDetails)}`;
+        
+        const thingRes = await fetch(proxyDetailsUrl);
+        const thingData = await thingRes.json();
+        const thingXml = thingData.contents;
 
         // 3. Tri des informations
         const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
@@ -134,9 +141,9 @@ btnSuggerer.addEventListener('click', async () => {
         const genreMatch = thingXml.match(/<link type="boardgamecategory"[^>]*value="([^"]+)"/i);
         const genre = genreMatch ? genreMatch[1] : "Général";
 
-        btnSuggerer.innerText = 'Enregistrement...';
+        btnSuggerer.innerText = 'Enregistrement Notion...';
 
-        // 4. Envoi des données prêtes à Vercel pour les mettre dans Notion
+        // 4. Envoi des données à Vercel
         const reponse = await fetch('/api/suggererJeu', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -153,7 +160,7 @@ btnSuggerer.addEventListener('click', async () => {
 
         if (reponse.ok) {
             inputRecherche.value = '';
-            chargerJeux(); // On recharge les cartes
+            chargerJeux();
         } else {
             alert("Erreur lors de l'enregistrement dans la base de données.");
         }
