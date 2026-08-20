@@ -2,20 +2,39 @@
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
     
-    const { nom, image, joueurs, duree, age, difficulte, genre } = req.body;
+    const { nom: nomSaisi } = req.body;
     const NOTION_SECRET = process.env.NOTION_SECRET;
     const DATABASE_ID = process.env.DATABASE_ID;
 
+    // Valeurs par défaut propres
+    let nom = nomSaisi;
+    let image = "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
+    let joueurs = "2-4";
+    let duree = "45";
+    let age = "10+";
+    let difficulte = "2.0/5";
+    let genre = "Stratégie";
+
     try {
-        try {
-            const atlasRes = await fetch(`https://api.boardgameatlas.com/api/search?name=${encodeURIComponent(nom)}&client_id=JLBr5npPhV`);
-            const atlasData = await atlasRes.json();
-            if (atlasData.games && atlasData.games.length > 0) {
-                finalImage = atlasData.games[0].image_url;
-            }
-        } catch (err) {
-            console.log("Image Atlas non trouvée, on garde l'image par défaut.");
+        // Vercel interroge BoardGameAtlas en arrière-plan (zéro blocage !)
+        const atlasRes = await fetch(`https://api.boardgameatlas.com/api/search?name=${encodeURIComponent(nomSaisi)}&client_id=JLBr5npPhV`);
+        const atlasData = await atlasRes.json();
+        
+        if (atlasData.games && atlasData.games.length > 0) {
+            const g = atlasData.games[0];
+            nom = g.name || nomSaisi;
+            image = g.image_url || image;
+            joueurs = `${g.min_players}-${g.max_players}`;
+            duree = g.min_playtime ? g.min_playtime.toString() : "45";
+            age = g.min_age ? g.min_age.toString() + "+" : "10+";
+            difficulte = g.average_user_rating ? g.average_user_rating.toFixed(1) + "/5" : "2.0/5";
+            genre = (g.categories && g.categories.length > 0) ? "Jeu de société" : "Stratégie";
         }
+    } catch (e) {
+        console.log("Erreur Atlas, utilisation des valeurs par défaut.");
+    }
+
+    try {
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -27,7 +46,7 @@ export default async function handler(req, res) {
                 parent: { database_id: DATABASE_ID },
                 properties: {
                     'Nom': { title: [{ text: { content: nom } }] },
-                    'Image': { url: `https://images.weserv.nl/?url=${encodeURIComponent(image)}` },
+                    'Image': { url: image },
                     'Joueurs': { rich_text: [{ text: { content: joueurs } }] },
                     'Durée': { rich_text: [{ text: { content: duree } }] },
                     'Âge': { rich_text: [{ text: { content: age } }] },
@@ -38,11 +57,9 @@ export default async function handler(req, res) {
             })
         });
 
-       if (!notionRes.ok) {
-            const erreurNotion = await notionRes.text();
-            console.error("ERREUR NOTION BRUTE :", erreurNotion);
-            // On renvoie l'erreur réelle reçue de Notion
-            return res.status(500).json({ error: erreurNotion });
+        if (!notionRes.ok) {
+            const errText = await notionRes.text();
+            return res.status(500).json({ error: errText });
         }
 
         res.status(200).json({ success: true });
