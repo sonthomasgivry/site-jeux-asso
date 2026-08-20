@@ -8,9 +8,8 @@ async function chargerJeux() {
         
         const jeux = await reponse.json();
         
-        // Si ta base Notion est vide ou renvoie autre chose qu'un tableau
-        if (!Array.isArray(jeux)) {
-            main.innerHTML = '<p style="text-align:center; padding: 20px;">Aucun jeu pour le moment. Fais une suggestion !</p>';
+        if (!Array.isArray(jeux) || jeux.length === 0) {
+            main.innerHTML = '<p style="text-align:center; width: 100%; padding: 20px;">Aucun jeu pour le moment. Fais une suggestion !</p>';
             return;
         }
         
