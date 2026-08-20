@@ -7,7 +7,6 @@ export default async function handler(req, res) {
     const DATABASE_ID = process.env.DATABASE_ID;
 
     try {
-        // L'arme secrète : on donne à Vercel la carte d'identité d'un vrai Google Chrome
         const optionsNav = {
             method: 'GET',
             headers: {
@@ -19,27 +18,30 @@ export default async function handler(req, res) {
             }
         };
 
-        // 1. Chercher le jeu directement sur BGG sans aucun relais !
         const urlRecherche = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
         const searchRes = await fetch(urlRecherche, optionsNav);
         const searchXml = await searchRes.text();
         
-        // Si BGG nous repère quand même, on le détecte proprement
+        // --- LE MOUCHARD EST ICI ---
+        console.error("--- DEBUT REPONSE BGG ---");
+        console.error(searchXml);
+        console.error("--- FIN REPONSE BGG ---");
+
         if (searchXml.includes('<!DOCTYPE html>') || searchXml.includes('<html')) {
-            console.error("Cloudflare a bloqué. Réponse :", searchXml.substring(0, 150));
-            return res.status(502).json({ error: "Bloqué par la sécurité de BGG." });
+            return res.status(502).json({ error: "Bloqué par la sécurité." });
         }
 
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
-        if (!idMatch) return res.status(404).json({ error: "Jeu introuvable." });
+        if (!idMatch) {
+            // C'est ici que le code s'arrête en ce moment !
+            return res.status(404).json({ error: "Jeu introuvable." });
+        }
         const gameId = idMatch[1];
 
-        // 2. Récupérer les détails
         const urlDetails = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
         const detailsRes = await fetch(urlDetails, optionsNav);
         const thingXml = await detailsRes.text();
 
-        // 3. Extractions
         const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
         const name = nameMatch ? nameMatch[1] : nomJeu;
         
@@ -62,7 +64,6 @@ export default async function handler(req, res) {
         const genreMatch = thingXml.match(/<link type="boardgamecategory"[^>]*value="([^"]+)"/i);
         const genre = genreMatch ? genreMatch[1] : "Général";
 
-        // 4. Envoyer à Notion
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -89,7 +90,6 @@ export default async function handler(req, res) {
 
         res.status(200).json({ success: true });
     } catch (error) {
-        console.error("Erreur générale :", error);
         res.status(500).json({ error: "Erreur serveur." });
     }
 }
