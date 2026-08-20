@@ -7,30 +7,26 @@ export default async function handler(req, res) {
     const DATABASE_ID = process.env.DATABASE_ID;
 
     try {
-        // On ajoute une "carte d'identité" pour rassurer la sécurité de BoardGameGeek
-        const headersBGG = {
-            'User-Agent': 'SiteJeuxAsso/1.0 (Contact: admin@association.fr)'
-        };
+        // Utilisation du proxy AllOrigins pour contourner le blocage de sécurité de BGG
+        const buildProxyUrl = (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
 
-        // 1. Chercher le jeu sur BoardGameGeek
-        const searchUrl = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
-        const searchRes = await fetch(searchUrl, { headers: headersBGG });
+        // 1. Chercher le jeu sur BoardGameGeek via le proxy
+        const searchUrl = buildProxyUrl(`https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${nomJeu}&exact=0`);
+        const searchRes = await fetch(searchUrl);
         const searchXml = await searchRes.text();
         
-        // Regex assouplie : on cherche l'ID peu importe l'ordre des autres mots
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
         if (!idMatch) {
-            console.error("Réponse de BGG introuvable. Voici ce que BGG a renvoyé : ", searchXml);
             return res.status(404).json({ error: "Jeu introuvable sur BoardGameGeek." });
         }
         const gameId = idMatch[1];
 
-        // 2. Récupérer les détails complets
-        const thingUrl = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
-        const thingRes = await fetch(thingUrl, { headers: headersBGG });
+        // 2. Récupérer les détails complets via le proxy
+        const thingUrl = buildProxyUrl(`https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`);
+        const thingRes = await fetch(thingUrl);
         const thingXml = await thingRes.text();
 
-        // 3. Extractions assouplies
+        // 3. Extractions des données
         const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
         const name = nameMatch ? nameMatch[1] : nomJeu;
         
@@ -53,7 +49,7 @@ export default async function handler(req, res) {
         const genreMatch = thingXml.match(/<link type="boardgamecategory"[^>]*value="([^"]+)"/i);
         const genre = genreMatch ? genreMatch[1] : "Général";
 
-        // 4. Envoyer toutes ces informations bien rangées dans Notion
+        // 4. Envoyer toutes ces informations dans Notion
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -76,10 +72,8 @@ export default async function handler(req, res) {
             })
         });
 
-        // Si Notion refuse, on l'écrit dans les logs Vercel pour comprendre pourquoi
         if (!notionRes.ok) {
-            const errorNotion = await notionRes.text();
-            console.error("Erreur Notion : ", errorNotion);
+            console.error("Erreur Notion : ", await notionRes.text());
             return res.status(500).json({ error: "Erreur lors de la création de la ligne Notion." });
         }
 
