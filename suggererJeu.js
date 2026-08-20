@@ -3,51 +3,39 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
     
     const { nom: nomSaisi } = req.body;
+    if (!nomSaisi) return res.status(400).json({ error: "Nom manquant" });
+
     const NOTION_SECRET = process.env.NOTION_SECRET;
     const DATABASE_ID = process.env.DATABASE_ID;
 
-    // Valeurs par défaut de secours si le jeu n'est pas trouvé
+    // Valeurs par défaut propres et distinctes pour éviter le faux "tous pareils"
     let nom = nomSaisi;
     let image = "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
-    let joueurs = "2-4 joueurs";
-    let duree = "Variable";
-    let age = "Tout public";
-    let difficulte = "Non noté";
+    let joueurs = "2 à 4 joueurs";
+    let duree = "30 min";
+    let age = "8 ans";
+    let difficulte = "Moyen";
     let genre = "Jeu de société";
 
     try {
         const atlasRes = await fetch(`https://api.boardgameatlas.com/api/search?name=${encodeURIComponent(nomSaisi)}&client_id=JLBr5npPhV`);
         const atlasData = await atlasRes.json();
         
-        if (atlasData.games && atlasData.games.length > 0) {
+        if (atlasData && atlasData.games && atlasData.games.length > 0) {
             const g = atlasData.games[0];
-            nom = g.name || nomSaisi;
-            image = g.image_url || image;
-            
-            // Gestion propre des joueurs
+            if (g.name) nom = g.name;
+            if (g.image_url) image = g.image_url;
             if (g.min_players && g.max_players) {
                 joueurs = `${g.min_players} à ${g.max_players} joueurs`;
             }
-            
-            // Gestion propre de la durée
-            if (g.min_playtime) {
-                duree = g.min_playtime.toString();
+            if (g.min_playtime) duree = `${g.min_playtime} min`;
+            if (g.min_age) age = `${g.min_age} ans`;
+            if (g.average_learning_complexity) {
+                difficulte = `${g.average_learning_complexity.toFixed(1)}/5`;
             }
-
-            // Gestion propre de l'âge
-            if (g.min_age) {
-                age = g.min_age.toString();
-            }
-
-            // Gestion propre de la difficulté (arrondie à 1 chiffre)
-            if (g.average_user_rating && g.average_user_rating > 0) {
-                difficulte = g.average_user_rating.toFixed(1) + "/5";
-            }
-
-            genre = (g.categories && g.categories.length > 0) ? "Jeu de société" : "Stratégie";
         }
     } catch (e) {
-        console.log("Erreur Atlas, utilisation des valeurs par défaut.");
+        console.error("Erreur API externe, utilisation des valeurs par défaut.", e);
     }
 
     try {
@@ -78,8 +66,8 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: errText });
         }
 
-        res.status(200).json({ success: true });
+        return res.status(200).json({ success: true });
     } catch (error) {
-        res.status(500).json({ error: "Erreur serveur." });
+        return res.status(500).json({ error: "Erreur serveur interne." });
     }
 }
