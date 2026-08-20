@@ -15,13 +15,18 @@ function afficherJeux(jeux) {
     main.innerHTML = ''; 
 
     jeux.forEach(jeu => {
-        // La NOUVEAUTÉ est ici : on récupère l'ID unique de la ligne dans Notion
         const idPage = jeu.id; 
         
         const nom = jeu.properties['Nom']?.title[0]?.plain_text || 'Jeu inconnu';
         const image = jeu.properties['Image']?.url || 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop';
         const joueurs = jeu.properties['Joueurs']?.rich_text[0]?.plain_text || 'N/A';
         const duree = jeu.properties['Durée']?.rich_text[0]?.plain_text || 'N/A';
+        
+        // Nouvelles informations BGG récupérées !
+        const age = jeu.properties['Âge']?.rich_text[0]?.plain_text || 'N/A';
+        const difficulte = jeu.properties['Difficulté']?.rich_text[0]?.plain_text || 'N/A';
+        const genre = jeu.properties['Genre']?.multi_select[0]?.name || 'Général';
+        
         const votes = jeu.properties['Votes']?.number || 0;
 
         const article = document.createElement('article');
@@ -29,9 +34,10 @@ function afficherJeux(jeux) {
         article.innerHTML = `
             <img src="${image}" alt="${nom}" class="image-jeu">
             <div class="contenu-carte">
-                <h2>${nom}</h2>
-                <p class="details">👥 ${joueurs} joueurs | ⏳ ${duree} min</p>
-                <!-- On cache l'ID et les votes actuels dans le bouton -->
+                <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #475569;">${genre}</span>
+                <h2 style="margin-top: 10px; margin-bottom: 5px;">${nom}</h2>
+                <p class="details" style="margin-bottom: 5px;">👥 ${joueurs} | ⏳ ${duree} min</p>
+                <p class="details">👶 ${age} ans | 🧠 Diff: ${difficulte}</p>
                 <button class="btn-vote" data-id="${idPage}" data-votes="${votes}">
                     ▲ Pour <span class="compteur">${votes}</span>
                 </button>
@@ -40,33 +46,27 @@ function afficherJeux(jeux) {
         main.appendChild(article);
     });
 
-    // Une fois toutes les cartes créées, on active les boutons
     activerBoutonsVote();
 }
 
-// L'animation et l'envoi du vote à Notion
+// L'animation et l'envoi du vote
 function activerBoutonsVote() {
     const boutonsVote = document.querySelectorAll('.btn-vote');
-    
     boutonsVote.forEach(bouton => {
         bouton.addEventListener('click', async function() {
-            // On empêche de spammer le bouton
             if (this.disabled) return;
             this.disabled = true;
 
-            // On récupère les infos cachées dans le bouton
             const idPage = this.getAttribute('data-id');
             let votesActuels = parseInt(this.getAttribute('data-votes'));
             let nouveauxVotes = votesActuels + 1;
 
-            // 1. On met à jour l'écran tout de suite pour l'utilisateur
             this.querySelector('.compteur').innerText = nouveauxVotes;
             this.setAttribute('data-votes', nouveauxVotes);
             this.style.backgroundColor = '#d1e7dd';
             this.style.borderColor = '#badbcc';
             this.style.color = '#0f5132';
 
-            // 2. On envoie discrètement la mise à jour à Notion via notre pont
             try {
                 await fetch('/api/ajouterVote', {
                     method: 'POST',
@@ -79,6 +79,42 @@ function activerBoutonsVote() {
         });
     });
 }
+
+// --- NOUVEAU : GESTION DE LA BARRE DE RECHERCHE ---
+const btnSuggerer = document.getElementById('btn-suggerer');
+const inputRecherche = document.getElementById('recherche-jeu');
+
+btnSuggerer.addEventListener('click', async () => {
+    const nomJeu = inputRecherche.value.trim();
+    if (!nomJeu) return; // On ne fait rien si la case est vide
+
+    // On désactive le bouton et on affiche "Recherche..."
+    btnSuggerer.disabled = true;
+    btnSuggerer.innerText = 'Recherche...';
+
+    try {
+        const reponse = await fetch('/api/suggererJeu', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nomJeu: nomJeu })
+        });
+
+        if (reponse.ok) {
+            // C'est un succès ! On vide la barre de recherche...
+            inputRecherche.value = '';
+            // ...et on recharge la page automatiquement pour voir le nouveau jeu
+            chargerJeux();
+        } else {
+            alert("Jeu introuvable sur BoardGameGeek ou erreur de connexion.");
+        }
+    } catch (erreur) {
+        alert("Une erreur est survenue lors de la suggestion.");
+    } finally {
+        // On remet le bouton à son état normal
+        btnSuggerer.disabled = false;
+        btnSuggerer.innerText = 'Suggérer';
+    }
+});
 
 // Lancement au démarrage
 chargerJeux();
