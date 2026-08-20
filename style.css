@@ -105,3 +105,29 @@ h1 {
 .btn-vote:hover {
     background-color: #e4e6e9;
 }
+/* Style de la zone de recherche */
+.zone-recherche {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+#recherche-jeu {
+    padding: 10px 15px;
+    font-size: 16px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    outline: none;
+    width: 250px;
+    transition: border-color 0.2s;
+}
+
+#recherche-jeu:focus {
+    border-color: #007bff; /* La bordure devient bleue quand on clique dedans */
+}
+
+/* On désactive le bouton pendant le chargement */
+.btn-suggerer:disabled {
+    background-color: #99c9ff;
+    cursor: wait;
+}
