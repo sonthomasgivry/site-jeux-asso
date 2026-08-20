@@ -1,6 +1,7 @@
-// Fonction pour récupérer les jeux depuis notre pont Vercel
+// --- 1. CHARGEMENT DES JEUX ---
 async function chargerJeux() {
     const main = document.querySelector('main');
+    main.innerHTML = '<p style="text-align: center; width: 100%; color: #666;">⏳ Chargement des jeux suggérés...</p>';
     
     try {
         const reponse = await fetch('/api/getJeux');
@@ -16,11 +17,11 @@ async function chargerJeux() {
         afficherJeux(jeux);
     } catch (erreur) {
         console.error("Erreur lors du chargement des jeux", erreur);
-        main.innerHTML = '<p style="text-align:center; padding: 20px; color: red;">Erreur de chargement des jeux depuis Notion.</p>';
+        main.innerHTML = '<p style="text-align:center; width: 100%; padding: 20px; color: red;">Erreur de chargement des jeux depuis Notion.</p>';
     }
 }
 
-// Fonction pour créer les cartes sur la page
+// --- 2. AFFICHAGE DES CARTES ---
 function afficherJeux(jeux) {
     const main = document.querySelector('main');
     main.innerHTML = ''; 
@@ -57,7 +58,7 @@ function afficherJeux(jeux) {
     activerBoutonsVote();
 }
 
-// L'animation et l'envoi du vote
+// --- 3. GESTION DES VOTES ---
 function activerBoutonsVote() {
     const boutonsVote = document.querySelectorAll('.btn-vote');
     boutonsVote.forEach(bouton => {
@@ -88,34 +89,40 @@ function activerBoutonsVote() {
     });
 }
 
-btnSuggerer.addEventListener('click', async () => {
-    const nomSaisi = inputRecherche.value.trim();
-    if (!nomSaisi) return;
+// --- 4. GESTION DE LA BARRE DE RECHERCHE ET DU BOUTON SUGGESTION ---
+const btnSuggerer = document.getElementById('btn-suggerer');
+const inputRecherche = document.getElementById('recherche-jeu');
 
-    btnSuggerer.disabled = true;
-    btnSuggerer.innerText = 'Recherche & Ajout...';
+if (btnSuggerer && inputRecherche) {
+    btnSuggerer.addEventListener('click', async () => {
+        const nomSaisi = inputRecherche.value.trim();
+        if (!nomSaisi) return;
 
-    try {
-        const reponse = await fetch('/api/suggererJeu', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nom: nomSaisi })
-        });
+        btnSuggerer.disabled = true;
+        btnSuggerer.innerText = 'Recherche & Ajout...';
 
-        if (reponse.ok) {
-            inputRecherche.value = '';
-            chargerJeux(); // Recharge la grille sans clignoter
-        } else {
-            const err = await reponse.json();
-            alert("Erreur : " + err.error);
+        try {
+            const reponse = await fetch('/api/suggererJeu', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nom: nomSaisi })
+            });
+
+            if (reponse.ok) {
+                inputRecherche.value = '';
+                chargerJeux(); // Recharge la grille proprement
+            } else {
+                const err = await reponse.json();
+                alert("Erreur : " + (err.error || "Inconnue"));
+            }
+        } catch (err) {
+            alert("Erreur de connexion.");
+        } finally {
+            btnSuggerer.disabled = false;
+            btnSuggerer.innerText = 'Suggérer';
         }
-    } catch (err) {
-        alert("Erreur de connexion.");
-    } finally {
-        btnSuggerer.disabled = false;
-        btnSuggerer.innerText = 'Suggérer';
-    }
-});
+    });
+}
 
-// Lancement au démarrage
+// --- 5. LANCEMENT AU DÉMARRAGE ---
 chargerJeux();
