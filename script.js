@@ -85,27 +85,87 @@ const btnSuggerer = document.getElementById('btn-suggerer');
 const inputRecherche = document.getElementById('recherche-jeu');
 
 btnSuggerer.addEventListener('click', async () => {
-    const nomJeu = inputRecherche.value.trim();
-    if (!nomJeu) return;
+    const nomSaisi = inputRecherche.value.trim();
+    if (!nomSaisi) return;
 
     btnSuggerer.disabled = true;
-    btnSuggerer.innerText = 'Recherche sur BGG...';
+    btnSuggerer.innerText = 'Recherche en cours...';
 
+    // Valeurs par défaut propres (Plan B)
+    let nom = nomSaisi;
+    let image = "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
+    let joueurs = "2-4";
+    let duree = "45";
+    let age = "10+";
+    let difficulte = "2.0/5";
+    let genre = "Stratégie";
+
+    try {
+        // On tente d'interroger BGG depuis le navigateur via un proxy ultra-rapide
+        const searchUrl = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomSaisi)}&exact=0`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+        
+        const res = await fetch(proxyUrl);
+        const data = await res.json();
+        
+        if (data && data.contents) {
+            const idMatch = data.contents.match(/<item[^>]*id="(\d+)"/i);
+            if (idMatch) {
+                const gameId = idMatch[1];
+                const detailsUrl = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
+                const proxyDetailsUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(detailsUrl)}`;
+                
+                const detRes = await fetch(proxyDetailsUrl);
+                const detData = await detRes.json();
+                
+                if (detData && detData.contents) {
+                    const xml = detData.contents;
+                    const nameMatch = xml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
+                    if (nameMatch) nom = nameMatch[1];
+                    
+                    const imageMatch = xml.match(/<image>(.*?)<\/image>/i);
+                    if (imageMatch) image = imageMatch[1];
+
+                    const minp = xml.match(/<minplayers[^>]*value="(\d+)"/i);
+                    const maxp = xml.match(/<maxplayers[^>]*value="(\d+)"/i);
+                    if (minp && maxp) joueurs = `${minp[1]}-${maxp[1]}`;
+
+                    const time = xml.match(/<playingtime[^>]*value="(\d+)"/i);
+                    if (time) duree = time[1];
+
+                    const minage = xml.match(/<minage[^>]*value="(\d+)"/i);
+                    if (minage) age = minage[1] + "+";
+
+                    const weight = xml.match(/<averageweight[^>]*value="([\d.]+)"/i);
+                    if (weight) difficulte = parseFloat(weight[1]).toFixed(1) + "/5";
+
+                    const cat = xml.match(/<link type="boardgamecategory"[^>]*value="([^"]+)"/i);
+                    if (cat) genre = cat[1];
+                }
+            }
+        }
+    } catch (e) {
+        console.log("BGG a toussé, utilisation du plan B direct.");
+    }
+
+    btnSuggerer.innerText = 'Enregistrement...';
+
+    // Envoi final à Vercel pour Notion
     try {
         const reponse = await fetch('/api/suggererJeu', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nomJeu: nomJeu })
+            body: JSON.stringify({ nom, image, joueurs, duree, age, difficulte, genre })
         });
 
         if (reponse.ok) {
             inputRecherche.value = '';
-            chargerJeux(); 
+            chargerJeux(); // Recharge la grille de l'asso !
         } else {
-            alert("Erreur : Jeu introuvable ou blocage sécurité BGG.");
+            alert("Erreur lors de l'enregistrement.");
         }
-    } catch (erreur) {
-        alert("Erreur de connexion avec le serveur.");
+    } catch (err) {
+        alert("Erreur de connexion.");
     } finally {
         btnSuggerer.disabled = false;
         btnSuggerer.innerText = 'Suggérer';
