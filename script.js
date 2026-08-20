@@ -172,6 +172,5 @@ btnSuggerer.addEventListener('click', async () => {
         btnSuggerer.innerText = 'Suggérer';
     }
 });
-
 // Lancement au démarrage
 chargerJeux();
