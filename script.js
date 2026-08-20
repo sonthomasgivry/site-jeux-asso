@@ -98,6 +98,11 @@ btnSuggerer.addEventListener('click', async () => {
         const urlRecherche = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
         const searchRes = await fetch(`${URL_GOOGLE}?url=${encodeURIComponent(urlRecherche)}`);
         const searchXml = await searchRes.text();
+
+        // --- LE MOUCHARD EST ICI ---
+        console.log("--- TEXTE REÇU DEPUIS GOOGLE ---");
+        console.log(searchXml);
+        console.log("--------------------------------");
         
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
         if (!idMatch) {
