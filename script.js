@@ -82,44 +82,28 @@ btnSuggerer.addEventListener('click', async () => {
     if (!nomSaisi) return;
 
     btnSuggerer.disabled = true;
-    btnSuggerer.innerText = 'Recherche...';
-
-    // 1. On va chercher les vraies infos sur BoardGameAtlas (c'est gratuit et ouvert)
-    let infoJeu = { nom: nomSaisi, image: "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop", joueurs: "À préciser", duree: "À préciser", age: "À préciser", difficulte: "N/A", genre: "Général" };
+    btnSuggerer.innerText = 'Recherche & Ajout...';
 
     try {
-        const response = await fetch(`https://api.boardgameatlas.com/api/search?name=${encodeURIComponent(nomSaisi)}&client_id=JLBr5npPhV`);
-        const data = await response.json();
-        
-        if (data.games && data.games.length > 0) {
-            const g = data.games[0];
-            infoJeu = {
-                nom: g.name,
-                image: g.image_url,
-                joueurs: `${g.min_players}-${g.max_players}`,
-                duree: g.min_playtime ? g.min_playtime.toString() : "À préciser",
-                age: g.min_age ? g.min_age.toString() + "+" : "À préciser",
-                difficulte: g.average_user_rating ? g.average_user_rating.toFixed(1) : "N/A",
-                genre: g.categories && g.categories.length > 0 ? "Jeu" : "Général"
-            };
+        const reponse = await fetch('/api/suggererJeu', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nom: nomSaisi })
+        });
+
+        if (reponse.ok) {
+            inputRecherche.value = '';
+            chargerJeux(); // Recharge la grille sans clignoter
+        } else {
+            const err = await reponse.json();
+            alert("Erreur : " + err.error);
         }
-    } catch (e) { console.log("Atlas a échoué, on utilise les valeurs par défaut."); }
-
-    // 2. Envoi à ton Vercel pour Notion
-    const reponse = await fetch('/api/suggererJeu', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(infoJeu)
-    });
-
-    if (reponse.ok) {
-        inputRecherche.value = '';
-        chargerJeux();
-    } else {
-        alert("Erreur d'enregistrement.");
+    } catch (err) {
+        alert("Erreur de connexion.");
+    } finally {
+        btnSuggerer.disabled = false;
+        btnSuggerer.innerText = 'Suggérer';
     }
-    btnSuggerer.disabled = false;
-    btnSuggerer.innerText = 'Suggérer';
 });
 
 // Lancement au démarrage
