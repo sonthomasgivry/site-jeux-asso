@@ -77,96 +77,49 @@ function activerBoutonsVote() {
     });
 }
 
-// --- GESTION DE LA BARRE DE RECHERCHE ---
-const btnSuggerer = document.getElementById('btn-suggerer');
-const inputRecherche = document.getElementById('recherche-jeu');
-
 btnSuggerer.addEventListener('click', async () => {
     const nomSaisi = inputRecherche.value.trim();
     if (!nomSaisi) return;
 
     btnSuggerer.disabled = true;
-    btnSuggerer.innerText = 'Recherche en cours...';
+    btnSuggerer.innerText = 'Recherche...';
 
-    // On initialise avec des valeurs neutres et vides (plus de faux 2-4 joueurs partout)
-    let nom = nomSaisi;
-    let image = "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
-    let joueurs = "2-4";
-    let duree = "Inconnue";
-    let age = "Tout âge";
-    let difficulte = "N/A";
-    let genre = "Général";
+    // 1. On va chercher les vraies infos sur BoardGameAtlas (c'est gratuit et ouvert)
+    let infoJeu = { nom: nomSaisi, image: "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop", joueurs: "À préciser", duree: "À préciser", age: "À préciser", difficulte: "N/A", genre: "Général" };
 
     try {
-        const searchUrl = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomSaisi)}&exact=0`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+        const response = await fetch(`https://api.boardgameatlas.com/api/search?name=${encodeURIComponent(nomSaisi)}&client_id=JLBr5npPhV`);
+        const data = await response.json();
         
-        const res = await fetch(proxyUrl);
-        const data = await res.json();
-        
-        if (data && data.contents) {
-            const idMatch = data.contents.match(/<item[^>]*id="(\d+)"/i);
-            if (idMatch) {
-                const gameId = idMatch[1];
-                const detailsUrl = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
-                const proxyDetailsUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(detailsUrl)}`;
-                
-                const detRes = await fetch(proxyDetailsUrl);
-                const detData = await detRes.json();
-                
-                if (detData && detData.contents) {
-                    const xml = detData.contents;
-                    const nameMatch = xml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
-                    if (nameMatch) nom = nameMatch[1];
-                    
-                    const imageMatch = xml.match(/<image>(.*?)<\/image>/i);
-                    if (imageMatch) image = imageMatch[1];
-
-                    const minp = xml.match(/<minplayers[^>]*value="(\d+)"/i);
-                    const maxp = xml.match(/<maxplayers[^>]*value="(\d+)"/i);
-                    if (minp && maxp) joueurs = `${minp[1]}-${maxp[1]}`;
-
-                    const time = xml.match(/<playingtime[^>]*value="(\d+)"/i);
-                    if (time) duree = time[1];
-
-                    const minage = xml.match(/<minage[^>]*value="(\d+)"/i);
-                    if (minage) age = minage[1] + "+";
-
-                    const weight = xml.match(/<averageweight[^>]*value="([\d.]+)"/i);
-                    if (weight) difficulte = parseFloat(weight[1]).toFixed(1) + "/5";
-
-                    const cat = xml.match(/<link type="boardgamecategory"[^>]*value="([^"]+)"/i);
-                    if (cat) genre = cat[1];
-                }
-            }
+        if (data.games && data.games.length > 0) {
+            const g = data.games[0];
+            infoJeu = {
+                nom: g.name,
+                image: g.image_url,
+                joueurs: `${g.min_players}-${g.max_players}`,
+                duree: g.min_playtime ? g.min_playtime.toString() : "À préciser",
+                age: g.min_age ? g.min_age.toString() + "+" : "À préciser",
+                difficulte: g.average_user_rating ? g.average_user_rating.toFixed(1) : "N/A",
+                genre: g.categories && g.categories.length > 0 ? "Jeu" : "Général"
+            };
         }
-    } catch (e) {
-        console.log("Erreur lors de la récupération BGG, utilisation des valeurs de base.");
+    } catch (e) { console.log("Atlas a échoué, on utilise les valeurs par défaut."); }
+
+    // 2. Envoi à ton Vercel pour Notion
+    const reponse = await fetch('/api/suggererJeu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(infoJeu)
+    });
+
+    if (reponse.ok) {
+        inputRecherche.value = '';
+        chargerJeux();
+    } else {
+        alert("Erreur d'enregistrement.");
     }
-
-    btnSuggerer.innerText = 'Enregistrement...';
-
-    // Envoi final à Vercel pour Notion
-    try {
-        const reponse = await fetch('/api/suggererJeu', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nom, image, joueurs, duree, age, difficulte, genre })
-        });
-
-        if (reponse.ok) {
-            inputRecherche.value = '';
-            chargerJeux(); 
-        } else {
-            const erreurDétail = await reponse.text();
-            alert("Erreur Notion : " + erreurDétail);
-        }
-    } catch (err) {
-        alert("Erreur de connexion.");
-    } finally {
-        btnSuggerer.disabled = false;
-        btnSuggerer.innerText = 'Suggérer';
-    }
+    btnSuggerer.disabled = false;
+    btnSuggerer.innerText = 'Suggérer';
 });
 
 // Lancement au démarrage
