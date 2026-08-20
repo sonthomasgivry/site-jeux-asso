@@ -92,12 +92,12 @@ btnSuggerer.addEventListener('click', async () => {
     btnSuggerer.innerText = 'Recherche sur BGG...';
 
     try {
-        // On utilise un relais beaucoup plus fiable et rapide (corsproxy.io)
+        // Le relais ultime (CodeTabs) qui ne se fait pas bloquer par BGG
         const urlRecherche = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
-        const proxySearchUrl = `https://corsproxy.io/?${encodeURIComponent(urlRecherche)}`;
+        const proxySearchUrl = `https://api.codetabs.com/v1/proxy?quest=${urlRecherche}`;
         
         const searchRes = await fetch(proxySearchUrl);
-        const searchXml = await searchRes.text(); // Ce proxy renvoie le texte pur directement !
+        const searchXml = await searchRes.text(); 
         
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
         if (!idMatch) {
@@ -110,7 +110,7 @@ btnSuggerer.addEventListener('click', async () => {
 
         // 2. Récupération des détails BGG
         const urlDetails = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
-        const proxyDetailsUrl = `https://corsproxy.io/?${encodeURIComponent(urlDetails)}`;
+        const proxyDetailsUrl = `https://api.codetabs.com/v1/proxy?quest=${urlDetails}`;
         
         const thingRes = await fetch(proxyDetailsUrl);
         const thingXml = await thingRes.text();
@@ -157,7 +157,7 @@ btnSuggerer.addEventListener('click', async () => {
 
         if (reponse.ok) {
             inputRecherche.value = '';
-            chargerJeux(); // On recharge les jeux pour afficher le petit nouveau !
+            chargerJeux(); // Recharge la page avec Akropolis !
         } else {
             alert("Erreur lors de l'enregistrement dans la base de données.");
         }
