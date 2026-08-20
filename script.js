@@ -80,37 +80,87 @@ function activerBoutonsVote() {
     });
 }
 
-// --- NOUVEAU : GESTION DE LA BARRE DE RECHERCHE ---
+// --- GESTION DE LA BARRE DE RECHERCHE ---
 const btnSuggerer = document.getElementById('btn-suggerer');
 const inputRecherche = document.getElementById('recherche-jeu');
 
 btnSuggerer.addEventListener('click', async () => {
     const nomJeu = inputRecherche.value.trim();
-    if (!nomJeu) return; // On ne fait rien si la case est vide
+    if (!nomJeu) return;
 
-    // On désactive le bouton et on affiche "Recherche..."
     btnSuggerer.disabled = true;
-    btnSuggerer.innerText = 'Recherche...';
+    btnSuggerer.innerText = 'Recherche sur BGG...';
 
     try {
+        // 1. Recherche BGG DEPUIS LE NAVIGATEUR (contourne les sécurités serveurs)
+        const searchUrl = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
+        const searchRes = await fetch(searchUrl);
+        const searchXml = await searchRes.text();
+        
+        const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
+        if (!idMatch) {
+            alert("Jeu introuvable sur BoardGameGeek.");
+            btnSuggerer.disabled = false;
+            btnSuggerer.innerText = 'Suggérer';
+            return;
+        }
+        const gameId = idMatch[1];
+
+        // 2. Récupération des détails BGG
+        const thingUrl = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
+        const thingRes = await fetch(thingUrl);
+        const thingXml = await thingRes.text();
+
+        // 3. Tri des informations
+        const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
+        const name = nameMatch ? nameMatch[1] : nomJeu;
+        
+        const imageMatch = thingXml.match(/<image>(.*?)<\/image>/i);
+        const image = imageMatch ? imageMatch[1] : "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
+
+        const minpMatch = thingXml.match(/<minplayers[^>]*value="(\d+)"/i);
+        const maxpMatch = thingXml.match(/<maxplayers[^>]*value="(\d+)"/i);
+        const joueurs = (minpMatch && maxpMatch) ? `${minpMatch[1]}-${maxpMatch[1]}` : "N/A";
+
+        const timeMatch = thingXml.match(/<playingtime[^>]*value="(\d+)"/i);
+        const duree = timeMatch ? timeMatch[1] : "N/A";
+
+        const ageMatch = thingXml.match(/<minage[^>]*value="(\d+)"/i);
+        const age = ageMatch ? ageMatch[1] + "+" : "N/A";
+
+        const weightMatch = thingXml.match(/<averageweight[^>]*value="([\d.]+)"/i);
+        const difficulte = weightMatch ? parseFloat(weightMatch[1]).toFixed(1) + "/5" : "N/A";
+
+        const genreMatch = thingXml.match(/<link type="boardgamecategory"[^>]*value="([^"]+)"/i);
+        const genre = genreMatch ? genreMatch[1] : "Général";
+
+        btnSuggerer.innerText = 'Enregistrement...';
+
+        // 4. Envoi des données prêtes à Vercel pour les mettre dans Notion
         const reponse = await fetch('/api/suggererJeu', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nomJeu: nomJeu })
+            body: JSON.stringify({
+                nom: name,
+                image: image,
+                joueurs: joueurs,
+                duree: duree,
+                age: age,
+                difficulte: difficulte,
+                genre: genre
+            })
         });
 
         if (reponse.ok) {
-            // C'est un succès ! On vide la barre de recherche...
             inputRecherche.value = '';
-            // ...et on recharge la page automatiquement pour voir le nouveau jeu
-            chargerJeux();
+            chargerJeux(); // On recharge les cartes
         } else {
-            alert("Jeu introuvable sur BoardGameGeek ou erreur de connexion.");
+            alert("Erreur lors de l'enregistrement dans la base de données.");
         }
     } catch (erreur) {
-        alert("Une erreur est survenue lors de la suggestion.");
+        console.error(erreur);
+        alert("Erreur de connexion avec BoardGameGeek.");
     } finally {
-        // On remet le bouton à son état normal
         btnSuggerer.disabled = false;
         btnSuggerer.innerText = 'Suggérer';
     }
