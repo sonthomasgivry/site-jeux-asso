@@ -7,34 +7,32 @@ export default async function handler(req, res) {
     const DATABASE_ID = process.env.DATABASE_ID;
 
     try {
-        // La clé du succès : on utilise le domaine alternatif officiel (geekdo) 
-        // et on se présente proprement pour passer le pare-feu de BGG.
-        const optionsBGG = {
-            method: 'GET',
-            headers: {
-                'User-Agent': 'SiteAssoJeux/1.0 (Vercel)',
-                'Accept': 'text/xml'
-            }
+        // La solution miracle : utiliser la version JSON du proxy AllOrigins 
+        // pour que BGG ne voie jamais l'adresse IP de notre serveur Vercel.
+        const fetchBGG = async (urlBGG) => {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlBGG)}`;
+            const response = await fetch(proxyUrl);
+            const data = await response.json();
+            return data.contents; // On extrait le vrai texte BGG
         };
 
-        // 1. Chercher le jeu (en encodant le texte pour gérer les espaces)
-        const urlRecherche = `https://api.geekdo.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}`;
-        const searchRes = await fetch(urlRecherche, optionsBGG);
-        const searchXml = await searchRes.text();
+        // 1. Chercher le jeu
+        const urlRecherche = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
+        const searchXml = await fetchBGG(urlRecherche);
         
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
         if (!idMatch) {
-            console.error("Aucun jeu trouvé. Réponse BGG :", searchXml);
+            // On laisse un mouchard pour lire la vraie réponse de BGG si ça bloque encore
+            console.error("Texte reçu par BGG :", searchXml.substring(0, 300));
             return res.status(404).json({ error: "Jeu introuvable sur BoardGameGeek." });
         }
         const gameId = idMatch[1];
 
-        // 2. Récupérer les détails complets
-        const urlDetails = `https://api.geekdo.com/xmlapi2/thing?id=${gameId}&stats=1`;
-        const detailsRes = await fetch(urlDetails, optionsBGG);
-        const thingXml = await detailsRes.text();
+        // 2. Récupérer les détails
+        const urlDetails = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
+        const thingXml = await fetchBGG(urlDetails);
 
-        // 3. Extractions des données
+        // 3. Extractions
         const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
         const name = nameMatch ? nameMatch[1] : nomJeu;
         
@@ -57,7 +55,7 @@ export default async function handler(req, res) {
         const genreMatch = thingXml.match(/<link type="boardgamecategory"[^>]*value="([^"]+)"/i);
         const genre = genreMatch ? genreMatch[1] : "Général";
 
-        // 4. Envoyer toutes ces informations dans Notion
+        // 4. Envoyer à Notion
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -82,7 +80,7 @@ export default async function handler(req, res) {
 
         if (!notionRes.ok) {
             console.error("Erreur Notion : ", await notionRes.text());
-            return res.status(500).json({ error: "Erreur lors de la création de la ligne Notion." });
+            return res.status(500).json({ error: "Erreur lors de la création Notion." });
         }
 
         res.status(200).json({ success: true });
