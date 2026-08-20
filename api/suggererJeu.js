@@ -7,34 +7,39 @@ export default async function handler(req, res) {
     const DATABASE_ID = process.env.DATABASE_ID;
 
     try {
-        // Fonction blindée : Vercel se moque du CORS, donc on utilise nos relais ici !
-        const fetchBGG = async (urlBGG) => {
-            try {
-                // Relais 1 : CodeTabs
-                const res1 = await fetch(`https://api.codetabs.com/v1/proxy?quest=${urlBGG}`);
-                if (res1.ok) return await res1.text();
-                throw new Error("CodeTabs a échoué");
-            } catch (e) {
-                // Relais 2 de secours : AllOrigins en mode JSON
-                const res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlBGG)}`);
-                const data = await res2.json();
-                return data.contents;
+        // L'arme secrète : on donne à Vercel la carte d'identité d'un vrai Google Chrome
+        const optionsNav = {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
             }
         };
 
-        // 1. Chercher le jeu (sans se soucier de Cloudflare ni du CORS !)
+        // 1. Chercher le jeu directement sur BGG sans aucun relais !
         const urlRecherche = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
-        const searchXml = await fetchBGG(urlRecherche);
+        const searchRes = await fetch(urlRecherche, optionsNav);
+        const searchXml = await searchRes.text();
         
+        // Si BGG nous repère quand même, on le détecte proprement
+        if (searchXml.includes('<!DOCTYPE html>') || searchXml.includes('<html')) {
+            console.error("Cloudflare a bloqué. Réponse :", searchXml.substring(0, 150));
+            return res.status(502).json({ error: "Bloqué par la sécurité de BGG." });
+        }
+
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
-        if (!idMatch) return res.status(404).json({ error: "Introuvable" });
+        if (!idMatch) return res.status(404).json({ error: "Jeu introuvable." });
         const gameId = idMatch[1];
 
         // 2. Récupérer les détails
         const urlDetails = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
-        const thingXml = await fetchBGG(urlDetails);
+        const detailsRes = await fetch(urlDetails, optionsNav);
+        const thingXml = await detailsRes.text();
 
-        // 3. Extractions des données
+        // 3. Extractions
         const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
         const name = nameMatch ? nameMatch[1] : nomJeu;
         
@@ -58,7 +63,7 @@ export default async function handler(req, res) {
         const genre = genreMatch ? genreMatch[1] : "Général";
 
         // 4. Envoyer à Notion
-        await fetch('https://api.notion.com/v1/pages', {
+        const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${NOTION_SECRET}`,
@@ -80,8 +85,11 @@ export default async function handler(req, res) {
             })
         });
 
+        if (!notionRes.ok) throw new Error("Erreur avec Notion");
+
         res.status(200).json({ success: true });
     } catch (error) {
+        console.error("Erreur générale :", error);
         res.status(500).json({ error: "Erreur serveur." });
     }
 }
