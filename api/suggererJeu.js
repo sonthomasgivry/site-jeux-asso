@@ -81,7 +81,12 @@ export default async function handler(req, res) {
             })
         });
 
-        if (!notionRes.ok) throw new Error("Erreur avec Notion");
+        if (!notionRes.ok) {
+            const erreurNotion = await notionRes.text();
+            console.error("--- ERREUR NOTION DÉTAILLÉE ---");
+            console.error(erreurNotion);
+            return res.status(500).json({ error: "Erreur avec Notion" });
+        }
 
         res.status(200).json({ success: true });
     } catch (error) {
