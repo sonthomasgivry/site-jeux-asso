@@ -92,14 +92,12 @@ btnSuggerer.addEventListener('click', async () => {
     btnSuggerer.innerText = 'Recherche sur BGG...';
 
     try {
-        // L'astuce anti-CORS : on passe par un relais gratuit (AllOrigins)
-        // qui enveloppe la réponse de BGG dans un format autorisé par ton navigateur.
+        // On utilise un relais beaucoup plus fiable et rapide (corsproxy.io)
         const urlRecherche = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
-        const proxySearchUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlRecherche)}`;
+        const proxySearchUrl = `https://corsproxy.io/?${encodeURIComponent(urlRecherche)}`;
         
         const searchRes = await fetch(proxySearchUrl);
-        const searchData = await searchRes.json();
-        const searchXml = searchData.contents; // Le vrai texte de BGG est caché ici !
+        const searchXml = await searchRes.text(); // Ce proxy renvoie le texte pur directement !
         
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
         if (!idMatch) {
@@ -110,13 +108,12 @@ btnSuggerer.addEventListener('click', async () => {
         }
         const gameId = idMatch[1];
 
-        // 2. Récupération des détails BGG via le même relais
+        // 2. Récupération des détails BGG
         const urlDetails = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
-        const proxyDetailsUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlDetails)}`;
+        const proxyDetailsUrl = `https://corsproxy.io/?${encodeURIComponent(urlDetails)}`;
         
         const thingRes = await fetch(proxyDetailsUrl);
-        const thingData = await thingRes.json();
-        const thingXml = thingData.contents;
+        const thingXml = await thingRes.text();
 
         // 3. Tri des informations
         const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
@@ -160,12 +157,12 @@ btnSuggerer.addEventListener('click', async () => {
 
         if (reponse.ok) {
             inputRecherche.value = '';
-            chargerJeux();
+            chargerJeux(); // On recharge les jeux pour afficher le petit nouveau !
         } else {
             alert("Erreur lors de l'enregistrement dans la base de données.");
         }
     } catch (erreur) {
-        console.error(erreur);
+        console.error("Détail de l'erreur :", erreur);
         alert("Erreur de connexion avec BoardGameGeek.");
     } finally {
         btnSuggerer.disabled = false;
