@@ -7,6 +7,15 @@ export default async function handler(req, res) {
     const DATABASE_ID = process.env.DATABASE_ID;
 
     try {
+        try {
+            const atlasRes = await fetch(`https://api.boardgameatlas.com/api/search?name=${encodeURIComponent(nom)}&client_id=JLBr5npPhV`);
+            const atlasData = await atlasRes.json();
+            if (atlasData.games && atlasData.games.length > 0) {
+                finalImage = atlasData.games[0].image_url;
+            }
+        } catch (err) {
+            console.log("Image Atlas non trouvée, on garde l'image par défaut.");
+        }
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
