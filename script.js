@@ -21,18 +21,15 @@ function afficherJeux(jeux) {
         const image = jeu.properties['Image']?.url || 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop';
         const joueurs = jeu.properties['Joueurs']?.rich_text[0]?.plain_text || 'N/A';
         const duree = jeu.properties['Durée']?.rich_text[0]?.plain_text || 'N/A';
-        
-        // Nouvelles informations BGG récupérées !
         const age = jeu.properties['Âge']?.rich_text[0]?.plain_text || 'N/A';
         const difficulte = jeu.properties['Difficulté']?.rich_text[0]?.plain_text || 'N/A';
         const genre = jeu.properties['Genre']?.multi_select[0]?.name || 'Général';
-        
         const votes = jeu.properties['Votes']?.number || 0;
 
         const article = document.createElement('article');
         article.className = 'carte-jeu';
         article.innerHTML = `
-            <img src="${image}" alt="${nom}" class="image-jeu">
+            <img src="${image}" alt="${nom}" class="image-jeu" onerror="this.src='https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop'">
             <div class="contenu-carte">
                 <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #475569;">${genre}</span>
                 <h2 style="margin-top: 10px; margin-bottom: 5px;">${nom}</h2>
@@ -91,17 +88,16 @@ btnSuggerer.addEventListener('click', async () => {
     btnSuggerer.disabled = true;
     btnSuggerer.innerText = 'Recherche en cours...';
 
-    // Valeurs par défaut propres (Plan B)
+    // On initialise avec des valeurs neutres et vides (plus de faux 2-4 joueurs partout)
     let nom = nomSaisi;
     let image = "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
     let joueurs = "2-4";
-    let duree = "45";
-    let age = "10+";
-    let difficulte = "2.0/5";
-    let genre = "Stratégie";
+    let duree = "Inconnue";
+    let age = "Tout âge";
+    let difficulte = "N/A";
+    let genre = "Général";
 
     try {
-        // On tente d'interroger BGG depuis le navigateur via un proxy ultra-rapide
         const searchUrl = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomSaisi)}&exact=0`;
         const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
         
@@ -145,7 +141,7 @@ btnSuggerer.addEventListener('click', async () => {
             }
         }
     } catch (e) {
-        console.log("BGG a toussé, utilisation du plan B direct.");
+        console.log("Erreur lors de la récupération BGG, utilisation des valeurs de base.");
     }
 
     btnSuggerer.innerText = 'Enregistrement...';
@@ -160,11 +156,10 @@ btnSuggerer.addEventListener('click', async () => {
 
         if (reponse.ok) {
             inputRecherche.value = '';
-            chargerJeux(); // Recharge la grille de l'asso !
+            chargerJeux(); 
         } else {
-            const data = await reponse.json();
-            // On affiche le message brut qui vient de l'erreur Notion
-            alert("Message Notion : " + data.error);
+            const erreurDétail = await reponse.text();
+            alert("Erreur Notion : " + erreurDétail);
         }
     } catch (err) {
         alert("Erreur de connexion.");
@@ -173,5 +168,6 @@ btnSuggerer.addEventListener('click', async () => {
         btnSuggerer.innerText = 'Suggérer';
     }
 });
+
 // Lancement au démarrage
 chargerJeux();
