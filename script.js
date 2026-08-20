@@ -162,6 +162,10 @@ btnSuggerer.addEventListener('click', async () => {
             inputRecherche.value = '';
             chargerJeux(); // Recharge la grille de l'asso !
         } else {
+            // ICI : On récupère le texte exact de l'erreur envoyée par Vercel
+            const erreurDétail = await reponse.text();
+            console.error("Erreur Notion :", erreurDétail);
+            alert("Erreur Notion : " + erreurDétail);
             alert("Erreur lors de l'enregistrement.");
         }
     } catch (err) {
