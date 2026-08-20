@@ -29,8 +29,11 @@ export default async function handler(req, res) {
             })
         });
 
-        if (!notionRes.ok) {
-            return res.status(500).json({ error: "Erreur Notion" });
+       if (!notionRes.ok) {
+            const erreurNotion = await notionRes.text();
+            console.error("ERREUR NOTION BRUTE :", erreurNotion);
+            // On renvoie l'erreur réelle reçue de Notion
+            return res.status(500).json({ error: erreurNotion });
         }
 
         res.status(200).json({ success: true });
