@@ -7,24 +7,32 @@ export default async function handler(req, res) {
     const DATABASE_ID = process.env.DATABASE_ID;
 
     try {
-        // Utilisation du proxy AllOrigins pour contourner le blocage de sécurité de BGG
-        const buildProxyUrl = (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        // La clé du succès : on utilise le domaine alternatif officiel (geekdo) 
+        // et on se présente proprement pour passer le pare-feu de BGG.
+        const optionsBGG = {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'SiteAssoJeux/1.0 (Vercel)',
+                'Accept': 'text/xml'
+            }
+        };
 
-        // 1. Chercher le jeu sur BoardGameGeek via le proxy
-        const searchUrl = buildProxyUrl(`https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${nomJeu}&exact=0`);
-        const searchRes = await fetch(searchUrl);
+        // 1. Chercher le jeu (en encodant le texte pour gérer les espaces)
+        const urlRecherche = `https://api.geekdo.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}`;
+        const searchRes = await fetch(urlRecherche, optionsBGG);
         const searchXml = await searchRes.text();
         
         const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
         if (!idMatch) {
+            console.error("Aucun jeu trouvé. Réponse BGG :", searchXml);
             return res.status(404).json({ error: "Jeu introuvable sur BoardGameGeek." });
         }
         const gameId = idMatch[1];
 
-        // 2. Récupérer les détails complets via le proxy
-        const thingUrl = buildProxyUrl(`https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`);
-        const thingRes = await fetch(thingUrl);
-        const thingXml = await thingRes.text();
+        // 2. Récupérer les détails complets
+        const urlDetails = `https://api.geekdo.com/xmlapi2/thing?id=${gameId}&stats=1`;
+        const detailsRes = await fetch(urlDetails, optionsBGG);
+        const thingXml = await detailsRes.text();
 
         // 3. Extractions des données
         const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
