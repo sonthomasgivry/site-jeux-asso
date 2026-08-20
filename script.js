@@ -83,31 +83,76 @@ function activerBoutonsVote() {
 // --- GESTION DE LA BARRE DE RECHERCHE ---
 const btnSuggerer = document.getElementById('btn-suggerer');
 const inputRecherche = document.getElementById('recherche-jeu');
+// COLONNE VERTE : Colle l'URL de ton application Web Google juste en dessous entre les guillemets :
+const URL_GOOGLE = "https://script.google.com/macros/s/AKfycbxGVMx1vNSfdJ8wb0aVBqDGtePuvB8dMVfyGii8sA7N5r9cJjKxKHiy7kqJS5i1rft-ag/exec";
 
 btnSuggerer.addEventListener('click', async () => {
     const nomJeu = inputRecherche.value.trim();
     if (!nomJeu) return;
 
     btnSuggerer.disabled = true;
-    btnSuggerer.innerText = 'Recherche en cours...';
+    btnSuggerer.innerText = 'Recherche sur BGG...';
 
     try {
-        // On demande à NOTRE serveur Vercel de faire le sale boulot !
+        // 1. Recherche BGG via ton pont secret Google !
+        const urlRecherche = `https://boardgamegeek.com/xmlapi2/search?type=boardgame&query=${encodeURIComponent(nomJeu)}&exact=0`;
+        const searchRes = await fetch(`${URL_GOOGLE}?url=${encodeURIComponent(urlRecherche)}`);
+        const searchXml = await searchRes.text();
+        
+        const idMatch = searchXml.match(/<item[^>]*id="(\d+)"/i);
+        if (!idMatch) {
+            alert("Jeu introuvable sur BoardGameGeek.");
+            btnSuggerer.disabled = false;
+            btnSuggerer.innerText = 'Suggérer';
+            return;
+        }
+        const gameId = idMatch[1];
+
+        // 2. Détails du jeu via ton pont Google
+        const urlDetails = `https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&stats=1`;
+        const thingRes = await fetch(`${URL_GOOGLE}?url=${encodeURIComponent(urlDetails)}`);
+        const thingXml = await thingRes.text();
+
+        // 3. Extractions
+        const nameMatch = thingXml.match(/<name type="primary"[^>]*value="([^"]+)"/i);
+        const name = nameMatch ? nameMatch[1] : nomJeu;
+        
+        const imageMatch = thingXml.match(/<image>(.*?)<\/image>/i);
+        const image = imageMatch ? imageMatch[1] : "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
+
+        const minpMatch = thingXml.match(/<minplayers[^>]*value="(\d+)"/i);
+        const maxpMatch = thingXml.match(/<maxplayers[^>]*value="(\d+)"/i);
+        const joueurs = (minpMatch && maxpMatch) ? `${minpMatch[1]}-${maxpMatch[1]}` : "N/A";
+
+        const timeMatch = thingXml.match(/<playingtime[^>]*value="(\d+)"/i);
+        const duree = timeMatch ? timeMatch[1] : "N/A";
+
+        const ageMatch = thingXml.match(/<minage[^>]*value="(\d+)"/i);
+        const age = ageMatch ? ageMatch[1] + "+" : "N/A";
+
+        const weightMatch = thingXml.match(/<averageweight[^>]*value="([\d.]+)"/i);
+        const difficulte = weightMatch ? parseFloat(weightMatch[1]).toFixed(1) + "/5" : "N/A";
+
+        const genreMatch = thingXml.match(/<link type="boardgamecategory"[^>]*value="([^"]+)"/i);
+        const genre = genreMatch ? genreMatch[1] : "Général";
+
+        btnSuggerer.innerText = 'Enregistrement Notion...';
+
+        // 4. Envoi des données toutes propres à Vercel
         const reponse = await fetch('/api/suggererJeu', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nomJeu: nomJeu })
+            body: JSON.stringify({ nom: name, image, joueurs, duree, age, difficulte, genre })
         });
 
         if (reponse.ok) {
             inputRecherche.value = '';
-            chargerJeux(); // On recharge les jeux pour voir Akropolis !
+            chargerJeux(); 
         } else {
-            alert("Jeu introuvable ou erreur de serveur.");
+            alert("Erreur lors de l'enregistrement dans la base de données.");
         }
     } catch (erreur) {
-        console.error("Erreur locale :", erreur);
-        alert("Erreur de connexion avec le serveur.");
+        alert("Erreur de connexion avec ton relais Google.");
     } finally {
         btnSuggerer.disabled = false;
         btnSuggerer.innerText = 'Suggérer';
