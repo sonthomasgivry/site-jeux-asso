@@ -1,11 +1,23 @@
 // Fonction pour récupérer les jeux depuis notre pont Vercel
 async function chargerJeux() {
+    const main = document.querySelector('main');
+    
     try {
         const reponse = await fetch('/api/getJeux');
+        if (!reponse.ok) throw new Error("Erreur réseau");
+        
         const jeux = await reponse.json();
+        
+        // Si ta base Notion est vide ou renvoie autre chose qu'un tableau
+        if (!Array.isArray(jeux)) {
+            main.innerHTML = '<p style="text-align:center; padding: 20px;">Aucun jeu pour le moment. Fais une suggestion !</p>';
+            return;
+        }
+        
         afficherJeux(jeux);
     } catch (erreur) {
         console.error("Erreur lors du chargement des jeux", erreur);
+        main.innerHTML = '<p style="text-align:center; padding: 20px; color: red;">Erreur de chargement des jeux depuis Notion.</p>';
     }
 }
 
