@@ -18,7 +18,7 @@ export default async function handler(req, res) {
                 parent: { database_id: DATABASE_ID },
                 properties: {
                     'Nom': { title: [{ text: { content: nom } }] },
-                    'Image': { url: image },
+                    'Image': { url: `https://images.weserv.nl/?url=${encodeURIComponent(image)}` },
                     'Joueurs': { rich_text: [{ text: { content: joueurs } }] },
                     'Durée': { rich_text: [{ text: { content: duree } }] },
                     'Âge': { rich_text: [{ text: { content: age } }] },
