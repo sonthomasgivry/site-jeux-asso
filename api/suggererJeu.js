@@ -16,14 +16,15 @@ export default async function handler(req, res) {
     };
 
     try {
+        // 1. Appel à l'IA pour obtenir les stats propres et le vrai nom du jeu
         const prompt = `Tu es un expert en jeux de société. Pour le jeu "${nomSaisi}", réponds UNIQUEMENT au format JSON avec exactement ces clés : 
-        - "nom": le vrai nom complet du jeu, 
+        - "nom": le vrai nom officiel et complet du jeu (ex: "7 Wonders" ou "Catan"), 
         - "joueurs": ex "2 à 4 joueurs", 
         - "duree": ex "45 min", 
         - "age": ex "10+ ans", 
         - "difficulte": ex "2.5/5", 
         - "genre": un seul mot descriptif,
-        - "description": une courte description accrocheuse du jeu en 2 phrases maximum pour donner envie d'y jouer.
+        - "description": une courte description accrocheuse du jeu en 2 phrases maximum.
         Ne génère aucun autre texte que le JSON.`;
         
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
@@ -47,17 +48,33 @@ export default async function handler(req, res) {
             infoJeu.difficulte = stats.difficulte || "N/A";
             infoJeu.genre = stats.genre || "Stratégie";
             infoJeu.description = stats.description || "Un super jeu à tester !";
-            
-            console.log("✅ Stats et description IA récupérées");
-        } else {
-            console.error("❌ Erreur API Gemini :", await geminiRes.text());
         }
-    } catch (e) {
-        console.error("❌ Crash dans le bloc Gemini :", e);
-    }
 
-    try {
-        // Envoi à Notion (on enregistre la description à la place de l'image)
+        // 2. VÉRIFICATION ANTI-DOUBLON DANS NOTION
+        const checkRes = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${NOTION_SECRET}`,
+                'Notion-Version': '2022-06-28',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                filter: {
+                    property: 'Nom',
+                    title: {
+                        equals: infoJeu.nom
+                    }
+                }
+            })
+        });
+
+        const checkData = await checkRes.json();
+        if (checkData.results && checkData.results.length > 0) {
+            // Le jeu existe déjà ! On stoppe tout et on prévient le front-end
+            return res.status(409).json({ error: "Ce jeu est déjà dans la liste !" });
+        }
+
+        // 3. ENREGISTREMENT DANS NOTION (si le jeu n'existe pas)
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -80,16 +97,11 @@ export default async function handler(req, res) {
             })
         });
 
-        if (!notionRes.ok) {
-            const errNotion = await notionRes.text();
-            console.error("❌ Erreur Notion :", errNotion);
-            throw new Error("Notion a refusé l'enregistrement");
-        }
+        if (!notionRes.ok) throw new Error("Erreur Notion");
         
-        console.log("✅ Enregistrement Notion réussi !");
         return res.status(200).json({ success: true });
     } catch (error) {
-        console.error("❌ Crash final Notion :", error);
-        return res.status(500).json({ error: "Erreur enregistrement Notion" });
+        console.error("❌ Erreur serveur :", error);
+        return res.status(500).json({ error: "Erreur interne" });
     }
 }
