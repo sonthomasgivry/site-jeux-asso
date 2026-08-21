@@ -50,7 +50,7 @@ async function chargerJeux() {
     }
 }
 
-// --- 3. AFFICHAGE DES CARTES ---
+// --- 3. AFFICHAGE DES CARTES (Alignement parfait des boutons) ---
 function afficherJeux(jeux) {
     const main = document.querySelector('main');
     if (!main) return;
@@ -75,12 +75,14 @@ function afficherJeux(jeux) {
 
         const article = document.createElement('article');
         article.className = 'carte-jeu';
+        // Force la carte à se comporter en colonne flexible
+        article.style.display = 'flex';
+        article.style.flexDirection = 'column';
 
-       // Conteneur visuel fixe de 180px pour toutes les cartes (avec image ou espace vide)
         let elementVisuel = '';
         if (imageURL) {
             elementVisuel = `
-                <div style="width: 100%; height: 180px; background-color: #f8fafc; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                <div style="width: 100%; height: 180px; background-color: #f8fafc; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                     <img src="${imageURL}" alt="${nom}" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>`;
         } else {
@@ -88,25 +90,27 @@ function afficherJeux(jeux) {
                 <div style="width: 100%; height: 180px; background-color: #f8fafc; border-top-left-radius: 8px; border-top-right-radius: 8px; flex-shrink: 0;"></div>`;
         }
 
-        // Style dynamique du bouton selon si on a déjà voté ou non
         const styleBouton = dejaVote 
             ? 'background-color: #d1e7dd; border-color: #badbcc; color: #0f5132;' 
             : 'background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;';
 
+        // Le contenu utilise justify-content: space-between pour pousser le bloc du bas (bouton) uniformément
         article.innerHTML = `
             ${elementVisuel}
-            <div class="contenu-carte" style="padding: 20px;">
-                <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #475569;">${genre}</span>
-                <h2 style="margin-top: 10px; margin-bottom: 8px;">${nom}</h2>
-                
-                <p style="font-size: 14px; color: #4b5563; font-style: italic; margin-bottom: 12px; line-height: 1.4;">"${description}"</p>
-
-                <p class="details" style="margin-bottom: 5px; font-size: 13px;">👥 ${joueurs} | ⏳ ${duree}</p>
-                <p class="details" style="font-size: 13px; margin-bottom: 15px;">👶 ${age} | 🧠 Diff: ${difficulte}</p>
-                
-                <button class="btn-vote" data-id="${idPage}" data-votes="${votes}" style="cursor: pointer; padding: 8px 16px; border-radius: 6px; font-weight: bold; width: 100%; transition: all 0.2s; ${styleBouton}">
-                    ▲ ${dejaVote ? 'Déjà voté' : 'Pour'} <span class="compteur">${votes}</span>
-                </button>
+            <div class="contenu-carte" style="padding: 20px; display: flex; flex-direction: column; flex-grow: 1; justify-content: space-between;">
+                <div>
+                    <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #475569;">${genre}</span>
+                    <h2 style="margin-top: 10px; margin-bottom: 8px;">${nom}</h2>
+                    <p style="font-size: 14px; color: #4b5563; font-style: italic; margin-bottom: 12px; line-height: 1.4;">"${description}"</p>
+                </div>
+                <div>
+                    <p class="details" style="margin-bottom: 5px; font-size: 13px;">👥 ${joueurs} | ⏳ ${duree}</p>
+                    <p class="details" style="font-size: 13px; margin-bottom: 15px;">👶 ${age} | 🧠 Diff: ${difficulte}</p>
+                    
+                    <button class="btn-vote" data-id="${idPage}" data-votes="${votes}" style="cursor: pointer; padding: 8px 16px; border-radius: 6px; font-weight: bold; width: 100%; transition: all 0.2s; ${styleBouton}">
+                        ▲ ${dejaVote ? 'Déjà voté' : 'Pour'} <span class="compteur">${votes}</span>
+                    </button>
+                </div>
             </div>
         `;
         main.appendChild(article);
@@ -128,19 +132,15 @@ function activerBoutonsVote() {
             let nouveauxVotes;
 
             if (dejaVote) {
-                // Si on a déjà voté, un clic annule le vote
                 nouveauxVotes = Math.max(0, votesActuels - 1);
-                jeuxVotes = jeuxVotes.filter(id => id !== idPage); // Retire l'ID du stockage local
+                jeuxVotes = jeuxVotes.filter(id => id !== idPage);
             } else {
-                // Sinon, on ajoute le vote
                 nouveauxVotes = votesActuels + 1;
-                jeuxVotes.push(idPage); // Ajoute l'ID au stockage local
+                jeuxVotes.push(idPage);
             }
 
-            // Met à jour la liste dans le navigateur
             localStorage.setItem('jeux_votes_association', JSON.stringify(jeuxVotes));
 
-            // Mise à jour visuelle immédiate du bouton
             const nouveauDejaVote = jeuxVotes.includes(idPage);
             this.setAttribute('data-votes', nouveauxVotes);
             this.innerHTML = `▲ ${nouveauDejaVote ? 'Déjà voté' : 'Pour'} <span class="compteur">${nouveauxVotes}</span>`;
@@ -162,7 +162,6 @@ function activerBoutonsVote() {
                     body: JSON.stringify({ pageId: idPage, nouveauxVotes: nouveauxVotes })
                 });
                 
-                // Rafraîchissement discret pour trier la liste selon le nouveau score
                 setTimeout(chargerJeux, 500);
             } catch (e) {
                 console.error("Erreur vote :", e);
