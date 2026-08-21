@@ -9,7 +9,6 @@ export default async function handler(req, res) {
 
     const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY, GOOGLE_API_KEY, GOOGLE_CX } = process.env;
 
-    // Valeurs de base en cas de secours
     let infoJeu = {
         nom: nomSaisi,
         joueurs: "N/A", duree: "N/A", age: "N/A", difficulte: "N/A", genre: "Stratégie",
@@ -17,10 +16,10 @@ export default async function handler(req, res) {
     };
 
     try {
-        // 1. APPEL À L'IA (GEMINI) - Lien mis à jour avec "gemini-1.5-flash-latest"
+        // 1. APPEL À L'IA (GEMINI) - Correction du nom du modèle ici (gemini-1.5-flash)
         const prompt = `Donne les informations exactes du jeu de société "${nomSaisi}". Réponds UNIQUEMENT au format JSON avec exactement ces clés : "nom" (vrai nom complet du jeu), "joueurs" (ex: "2 à 4 joueurs"), "duree" (ex: "45 min"), "age" (ex: "10+ ans"), "difficulte" (note de complexité sur 5, ex: "2.5/5"), "genre" (un seul mot descriptif). Ne génère aucun autre texte.`;
         
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
