@@ -3,11 +3,11 @@ document.addEventListener('DOMContentLoaded', () => {
     chargerJeux();
 
     const btn = document.querySelector('#btn-suggerer');
-    const input = document.querySelector('#recherche-jeu');
+    const inputJeu = document.querySelector('#recherche-jeu');
 
-    if (btn && input) {
+    if (btn && inputJeu) {
         btn.addEventListener('click', async () => {
-            const nomJeu = input.value.trim();
+            const nomJeu = inputJeu.value.trim();
             if (!nomJeu) return;
 
             btn.innerText = "Recherche en cours...";
@@ -21,13 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 if (res.ok) {
-                    input.value = '';
+                    inputJeu.value = '';
                     chargerJeux(); 
                 } else if (res.status === 409) {
                     alert("Ce jeu est déjà présent dans la liste des suggestions ! Vous pouvez voter pour lui directement.");
-                    input.value = '';
-                } else if (res.status === 429) {
-                    alert("L'IA fait une petite pause (limite de requêtes atteinte). Patientez 1 minute et réessayez !");
+                    inputJeu.value = '';
                 } else {
                     alert("Erreur lors de l'ajout du jeu.");
                 }
@@ -52,20 +50,20 @@ async function chargerJeux() {
     }
 }
 
-// --- 3. AFFICHAGE DES CARTES (Avec Description IA) ---
+// --- 3. AFFICHAGE DES CARTES ---
 function afficherJeux(jeux) {
     const main = document.querySelector('main');
     if (!main) return;
     main.innerHTML = ''; 
 
-    // Liste des ID déjà votés par l'utilisateur (Anti-spam)
     const jeuxVotes = JSON.parse(localStorage.getItem('jeux_votes_association') || '[]');
 
     jeux.forEach(jeu => {
         const idPage = jeu.id; 
         
         const nom = jeu.properties['Nom']?.title[0]?.plain_text || 'Jeu inconnu';
-        const description = jeu.properties['Description']?.rich_text[0]?.plain_text || 'Aucune description disponible.';
+        const description = jeu.properties['Description']?.rich_text[0]?.plain_text || '';
+        const imageURL = jeu.properties['Image']?.url || ''; // S'affiche si tu as ajouté une image dans Notion
         const joueurs = jeu.properties['Joueurs']?.rich_text[0]?.plain_text || 'N/A';
         const duree = jeu.properties['Durée']?.rich_text[0]?.plain_text || 'N/A';
         const age = jeu.properties['Âge']?.rich_text[0]?.plain_text || 'N/A';
@@ -77,13 +75,24 @@ function afficherJeux(jeux) {
 
         const article = document.createElement('article');
         article.className = 'carte-jeu';
+
+        // Si tu as ajouté manuellement une image dans Notion, elle s'affiche en haut de la carte
+        let elementVisuel = '';
+        if (imageURL) {
+            elementVisuel = `<img src="${imageURL}" alt="${nom}" style="width: 100%; height: 180px; object-fit: cover; border-top-left-radius: 8px; border-top-right-radius: 8px;">`;
+        }
+
         article.innerHTML = `
+            ${elementVisuel}
             <div class="contenu-carte" style="padding: 20px;">
                 <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #475569;">${genre}</span>
                 <h2 style="margin-top: 10px; margin-bottom: 8px;">${nom}</h2>
+                
                 <p style="font-size: 14px; color: #4b5563; font-style: italic; margin-bottom: 12px; line-height: 1.4;">"${description}"</p>
+
                 <p class="details" style="margin-bottom: 5px; font-size: 13px;">👥 ${joueurs} | ⏳ ${duree}</p>
                 <p class="details" style="font-size: 13px; margin-bottom: 15px;">👶 ${age} | 🧠 Diff: ${difficulte}</p>
+                
                 <button class="btn-vote" data-id="${idPage}" data-votes="${votes}" ${dejaVote ? 'disabled style="background-color: #d1e7dd; border-color: #badbcc; color: #0f5132; cursor: not-allowed;"' : ''}>
                     ▲ ${dejaVote ? 'Déjà voté' : 'Pour'} <span class="compteur">${votes}</span>
                 </button>
@@ -107,13 +116,11 @@ function activerBoutonsVote() {
             let votesActuels = parseInt(this.getAttribute('data-votes'));
             let nouveauxVotes = votesActuels + 1;
 
-            // Mise à jour visuelle immédiate
             this.innerHTML = `▲ Déjà voté <span class="compteur">${nouveauxVotes}</span>`;
             this.style.backgroundColor = '#d1e7dd';
             this.style.color = '#0f5132';
             this.style.cursor = 'not-allowed';
 
-            // Sauvegarde locale pour l'anti-spam
             const jeuxVotes = JSON.parse(localStorage.getItem('jeux_votes_association') || '[]');
             if (!jeuxVotes.includes(idPage)) {
                 jeuxVotes.push(idPage);
@@ -127,7 +134,6 @@ function activerBoutonsVote() {
                     body: JSON.stringify({ pageId: idPage, nouveauxVotes: nouveauxVotes })
                 });
                 
-                // Rafraîchissement discret pour trier la liste selon le nouveau score
                 setTimeout(chargerJeux, 500);
             } catch (e) {
                 console.error("Erreur vote :", e);
