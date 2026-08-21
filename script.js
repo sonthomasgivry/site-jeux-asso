@@ -2,15 +2,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     chargerJeux();
 
-    // Gestion du formulaire de suggestion
-    const form = document.querySelector('#form-suggestion');
-    if (form) {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const input = document.querySelector('#input-jeu');
-            const btn = document.querySelector('#btn-suggerer');
-            const nomJeu = input.value;
+    // Gestion du clic sur le bouton (adapté à tes IDs réels)
+    const btn = document.querySelector('#btn-suggerer');
+    const input = document.querySelector('#recherche-jeu');
 
+    if (btn) {
+        btn.addEventListener('click', async () => {
+            const nomJeu = input.value;
             if (!nomJeu) return;
 
             btn.innerText = "Recherche en cours...";
@@ -25,9 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (res.ok) {
                     input.value = '';
-                    chargerJeux(); // Recharge la liste après ajout
+                    chargerJeux(); // Recharge la liste
                 } else {
-                    alert("Erreur lors de l'ajout du jeu.");
+                    alert("Erreur lors de l'ajout.");
                 }
             } catch (err) {
                 console.error("Erreur suggestion :", err);
@@ -39,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- 2. RÉCUPÉRATION DES JEUX (Triés par Notion) ---
+// --- 2. RÉCUPÉRATION DES JEUX ---
 async function chargerJeux() {
     try {
         const res = await fetch('/api/getJeux');
@@ -55,12 +53,10 @@ function afficherJeux(jeux) {
     const main = document.querySelector('main');
     main.innerHTML = ''; 
 
-    // Liste des ID déjà votés par l'utilisateur
     const jeuxVotes = JSON.parse(localStorage.getItem('jeux_votes_association') || '[]');
 
     jeux.forEach(jeu => {
         const idPage = jeu.id; 
-        
         const nom = jeu.properties['Nom']?.title[0]?.plain_text || 'Jeu inconnu';
         const image = jeu.properties['Image']?.url || 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop';
         const joueurs = jeu.properties['Joueurs']?.rich_text[0]?.plain_text || 'N/A';
@@ -74,7 +70,6 @@ function afficherJeux(jeux) {
 
         const article = document.createElement('article');
         article.className = 'carte-jeu';
-        // Le onerror sur l'image évite le clignotement si l'image Notion est inaccessible
         article.innerHTML = `
             <img src="${image}" alt="${nom}" class="image-jeu" onerror="this.src='https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop'">
             <div class="contenu-carte">
@@ -93,7 +88,7 @@ function afficherJeux(jeux) {
     activerBoutonsVote();
 }
 
-// --- 4. GESTION DES VOTES (Anti-spam) ---
+// --- 4. GESTION DES VOTES ---
 function activerBoutonsVote() {
     document.querySelectorAll('.btn-vote').forEach(bouton => {
         if (bouton.disabled) return;
@@ -105,12 +100,10 @@ function activerBoutonsVote() {
             let votesActuels = parseInt(this.getAttribute('data-votes'));
             let nouveauxVotes = votesActuels + 1;
 
-            // Mise à jour visuelle immédiate
             this.innerHTML = `▲ Déjà voté <span class="compteur">${nouveauxVotes}</span>`;
             this.style.backgroundColor = '#d1e7dd';
             this.style.color = '#0f5132';
 
-            // Sauvegarde locale
             const jeuxVotes = JSON.parse(localStorage.getItem('jeux_votes_association') || '[]');
             jeuxVotes.push(idPage);
             localStorage.setItem('jeux_votes_association', JSON.stringify(jeuxVotes));
@@ -122,7 +115,6 @@ function activerBoutonsVote() {
                     body: JSON.stringify({ pageId: idPage, nouveauxVotes: nouveauxVotes })
                 });
                 
-                // Rafraîchissement discret pour ré-ordonner la liste
                 setTimeout(chargerJeux, 500);
             } catch (e) {
                 console.error("Erreur vote :", e);
