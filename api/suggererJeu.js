@@ -7,8 +7,9 @@ export default async function handler(req, res) {
     const { nom: nomSaisi } = req.body;
     if (!nomSaisi) return res.status(400).json({ error: "Nom manquant" });
 
-    const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY, GOOGLE_API_KEY, GOOGLE_CX } = process.env;
+    const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY } = process.env;
 
+    // Valeurs de base en cas de secours
     let infoJeu = {
         nom: nomSaisi,
         joueurs: "N/A", duree: "N/A", age: "N/A", difficulte: "N/A", genre: "Stratégie",
@@ -16,8 +17,16 @@ export default async function handler(req, res) {
     };
 
     try {
-        // 1. APPEL À L'IA (GEMINI) - Modèle mis à jour : gemini-3.6-flash
-        const prompt = `Donne les informations exactes du jeu de société "${nomSaisi}". Réponds UNIQUEMENT au format JSON avec exactement ces clés : "nom" (vrai nom complet du jeu), "joueurs" (ex: "2 à 4 joueurs"), "duree" (ex: "45 min"), "age" (ex: "10+ ans"), "difficulte" (note de complexité sur 5, ex: "2.5/5"), "genre" (un seul mot descriptif). Ne génère aucun autre texte.`;
+        // On demande à Gemini les stats ET une vraie belle URL d'image de la boîte du jeu
+        const prompt = `Tu es un expert en jeux de société. Pour le jeu "${nomSaisi}", réponds UNIQUEMENT au format JSON avec exactement ces clés : 
+        - "nom": le vrai nom complet du jeu, 
+        - "joueurs": ex "2 à 4 joueurs", 
+        - "duree": ex "45 min", 
+        - "age": ex "10+ ans", 
+        - "difficulte": ex "2.5/5", 
+        - "genre": un seul mot descriptif,
+        - "image": l'URL directe d'une image de la boîte du jeu (prends une image officielle ou de BoardGameGeek si possible, sinon une image générique propre). 
+        Ne génère aucun autre texte que le JSON.`;
         
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
@@ -39,7 +48,10 @@ export default async function handler(req, res) {
             infoJeu.age = stats.age || "N/A";
             infoJeu.difficulte = stats.difficulte || "N/A";
             infoJeu.genre = stats.genre || "Stratégie";
-            console.log("✅ Stats IA récupérées avec succès");
+            if (stats.image && stats.image.startsWith('http')) {
+                infoJeu.image = stats.image;
+            }
+            console.log("✅ Stats et image IA récupérées avec succès");
         } else {
             console.error("❌ Erreur API Gemini :", await geminiRes.text());
         }
@@ -48,25 +60,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        // 2. APPEL À GOOGLE IMAGES
-        const rechercheImage = encodeURIComponent(`${infoJeu.nom} jeu de societe boite`);
-        const searchRes = await fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${rechercheImage}&searchType=image&num=1`);
-        
-        if (searchRes.ok) {
-            const searchData = await searchRes.json();
-            if (searchData.items && searchData.items.length > 0) {
-                infoJeu.image = searchData.items[0].link;
-                console.log("✅ Image Google récupérée avec succès");
-            }
-        } else {
-             console.error("❌ Erreur Google Image :", await searchRes.text());
-        }
-    } catch (e) {
-        console.error("❌ Crash Google Image :", e);
-    }
-
-    try {
-        // 3. ENVOI FINAL À Notion
+        // ENVOI FINAL À NOTION
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
