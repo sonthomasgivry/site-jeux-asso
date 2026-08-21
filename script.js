@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (res.ok) {
                     input.value = '';
                     chargerJeux(); // Recharge la liste des jeux
+                } else if (res.status === 409) {
+                    alert("Ce jeu est déjà présent dans la liste des suggestions ! Vous pouvez voter pour lui directement.");
+                    input.value = '';
                 } else {
                     alert("Erreur lors de l'ajout du jeu.");
                 }
