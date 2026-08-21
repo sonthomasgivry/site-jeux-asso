@@ -9,6 +9,7 @@ export default async function handler(req, res) {
 
     const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY } = process.env;
 
+    // Image de secours propre et garantie 100% fonctionnelle
     let imageFinale = "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
 
     let infoJeu = {
@@ -25,7 +26,7 @@ export default async function handler(req, res) {
         - "age": ex "10+ ans", 
         - "difficulte": ex "2.5/5", 
         - "genre": un seul mot descriptif,
-        - "image": l'URL directe et publique d'une image de la boîte du jeu. IMPORTANT : N'utilise PAS de liens BoardGameGeek avec le suffixe __opengraph (ils bloquent l'affichage). Préfère une image Wikimedia Commons, un site marchand ou une image hébergée de manière stable se terminant par .jpg ou .png. Si tu n'es pas sûr à 100%, mets une image vide ou générique.
+        - "image": l'URL directe d'une image publique (comme une image Wikimedia Commons si elle existe). IMPORTANT : N'invente JAMAIS une URL de site marchand (comme Philibert ou autre) car elle donnerait une erreur 404. Si tu n'as pas de lien direct d'image parfaitement stable et valide, laisse cette clé vide ou mets une chaîne vide "".
         Ne génère aucun autre texte que le JSON.`;
         
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
@@ -49,11 +50,12 @@ export default async function handler(req, res) {
             infoJeu.difficulte = stats.difficulte || "N/A";
             infoJeu.genre = stats.genre || "Stratégie";
             
-            if (stats.image && stats.image.startsWith('http') && !stats.image.includes('opengraph')) {
-                infoJeu.image = stats.image;
+            // Si l'IA a donné un vrai lien valide, on l'utilise via le proxy weserv, sinon on garde l'image de secours Unsplash
+            if (stats.image && stats.image.startsWith('http')) {
+                infoJeu.image = `https://images.weserv.nl/?url=${encodeURIComponent(stats.image)}`;
             }
             
-            console.log("✅ Stats et image IA récupérées :", infoJeu.image);
+            console.log("✅ Stats et image traitées :", infoJeu.image);
         } else {
             console.error("❌ Erreur API Gemini :", await geminiRes.text());
         }
