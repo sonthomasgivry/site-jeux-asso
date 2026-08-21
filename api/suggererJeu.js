@@ -9,24 +9,21 @@ export default async function handler(req, res) {
 
     const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY } = process.env;
 
-    // Image de secours propre, stable et garantie 100% compatible
-    const imageSecours = "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
-
     let infoJeu = {
         nom: nomSaisi,
         joueurs: "N/A", duree: "N/A", age: "N/A", difficulte: "N/A", genre: "Stratégie",
-        image: imageSecours
+        description: "Un jeu passionnant à découvrir en association !"
     };
 
     try {
-        // 1. APPEL À L'IA (GEMINI) pour les statistiques textuelles
         const prompt = `Tu es un expert en jeux de société. Pour le jeu "${nomSaisi}", réponds UNIQUEMENT au format JSON avec exactement ces clés : 
         - "nom": le vrai nom complet du jeu, 
         - "joueurs": ex "2 à 4 joueurs", 
         - "duree": ex "45 min", 
         - "age": ex "10+ ans", 
         - "difficulte": ex "2.5/5", 
-        - "genre": un seul mot descriptif.
+        - "genre": un seul mot descriptif,
+        - "description": une courte description accrocheuse du jeu en 2 phrases maximum pour donner envie d'y jouer.
         Ne génère aucun autre texte que le JSON.`;
         
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
@@ -49,8 +46,9 @@ export default async function handler(req, res) {
             infoJeu.age = stats.age || "N/A";
             infoJeu.difficulte = stats.difficulte || "N/A";
             infoJeu.genre = stats.genre || "Stratégie";
+            infoJeu.description = stats.description || "Un super jeu à tester !";
             
-            console.log("✅ Stats IA récupérées avec succès");
+            console.log("✅ Stats et description IA récupérées");
         } else {
             console.error("❌ Erreur API Gemini :", await geminiRes.text());
         }
@@ -59,7 +57,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        // 2. ENVOI FINAL À NOTION
+        // Envoi à Notion (on enregistre la description à la place de l'image)
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -71,7 +69,7 @@ export default async function handler(req, res) {
                 parent: { database_id: DATABASE_ID },
                 properties: {
                     'Nom': { title: [{ text: { content: infoJeu.nom } }] },
-                    'Image': { url: infoJeu.image },
+                    'Description': { rich_text: [{ text: { content: infoJeu.description } }] },
                     'Joueurs': { rich_text: [{ text: { content: infoJeu.joueurs } }] },
                     'Durée': { rich_text: [{ text: { content: infoJeu.duree } }] },
                     'Âge': { rich_text: [{ text: { content: infoJeu.age } }] },
