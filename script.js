@@ -1,4 +1,45 @@
-// --- 1. CHARGEMENT DES JEUX (au démarrage) ---
+// --- 1. CHARGEMENT INITIAL ---
+document.addEventListener('DOMContentLoaded', () => {
+    chargerJeux();
+
+    // Gestion du formulaire de suggestion
+    const form = document.querySelector('#form-suggestion');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.querySelector('#input-jeu');
+            const btn = document.querySelector('#btn-suggerer');
+            const nomJeu = input.value;
+
+            if (!nomJeu) return;
+
+            btn.innerText = "Recherche en cours...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/suggererJeu', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nom: nomJeu })
+                });
+                
+                if (res.ok) {
+                    input.value = '';
+                    chargerJeux(); // Recharge la liste après ajout
+                } else {
+                    alert("Erreur lors de l'ajout du jeu.");
+                }
+            } catch (err) {
+                console.error("Erreur suggestion :", err);
+            } finally {
+                btn.innerText = "Suggérer";
+                btn.disabled = false;
+            }
+        });
+    }
+});
+
+// --- 2. RÉCUPÉRATION DES JEUX (Triés par Notion) ---
 async function chargerJeux() {
     try {
         const res = await fetch('/api/getJeux');
@@ -9,12 +50,12 @@ async function chargerJeux() {
     }
 }
 
-// --- 2. AFFICHAGE DES CARTES ---
+// --- 3. AFFICHAGE DES CARTES ---
 function afficherJeux(jeux) {
     const main = document.querySelector('main');
     main.innerHTML = ''; 
 
-    // Récupère la liste des jeux déjà votés par cet utilisateur sur son navigateur
+    // Liste des ID déjà votés par l'utilisateur
     const jeuxVotes = JSON.parse(localStorage.getItem('jeux_votes_association') || '[]');
 
     jeux.forEach(jeu => {
@@ -33,6 +74,7 @@ function afficherJeux(jeux) {
 
         const article = document.createElement('article');
         article.className = 'carte-jeu';
+        // Le onerror sur l'image évite le clignotement si l'image Notion est inaccessible
         article.innerHTML = `
             <img src="${image}" alt="${nom}" class="image-jeu" onerror="this.src='https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop'">
             <div class="contenu-carte">
@@ -51,10 +93,9 @@ function afficherJeux(jeux) {
     activerBoutonsVote();
 }
 
-// --- 3. GESTION DES VOTES & ANTI-SPAM ---
+// --- 4. GESTION DES VOTES (Anti-spam) ---
 function activerBoutonsVote() {
-    const boutonsVote = document.querySelectorAll('.btn-vote');
-    boutonsVote.forEach(bouton => {
+    document.querySelectorAll('.btn-vote').forEach(bouton => {
         if (bouton.disabled) return;
 
         bouton.addEventListener('click', async function() {
@@ -66,18 +107,13 @@ function activerBoutonsVote() {
 
             // Mise à jour visuelle immédiate
             this.innerHTML = `▲ Déjà voté <span class="compteur">${nouveauxVotes}</span>`;
-            this.setAttribute('data-votes', nouveauxVotes);
             this.style.backgroundColor = '#d1e7dd';
-            this.style.borderColor = '#badbcc';
             this.style.color = '#0f5132';
-            this.style.cursor = 'not-allowed';
 
-            // Enregistrement dans le navigateur pour bloquer les futurs clics
+            // Sauvegarde locale
             const jeuxVotes = JSON.parse(localStorage.getItem('jeux_votes_association') || '[]');
-            if (!jeuxVotes.includes(idPage)) {
-                jeuxVotes.push(idPage);
-                localStorage.setItem('jeux_votes_association', JSON.stringify(jeuxVotes));
-            }
+            jeuxVotes.push(idPage);
+            localStorage.setItem('jeux_votes_association', JSON.stringify(jeuxVotes));
 
             try {
                 await fetch('/api/ajouterVote', {
@@ -86,17 +122,11 @@ function activerBoutonsVote() {
                     body: JSON.stringify({ pageId: idPage, nouveauxVotes: nouveauxVotes })
                 });
                 
-                // Rechargement discret pour trier la liste selon le nouveau score
-                setTimeout(() => {
-                    chargerJeux();
-                }, 500);
-
-            } catch (erreur) {
-                console.error("Erreur d'enregistrement du vote", erreur);
+                // Rafraîchissement discret pour ré-ordonner la liste
+                setTimeout(chargerJeux, 500);
+            } catch (e) {
+                console.error("Erreur vote :", e);
             }
         });
     });
 }
-
-// Lancement au chargement de la page
-document.addEventListener('DOMContentLoaded', chargerJeux);
