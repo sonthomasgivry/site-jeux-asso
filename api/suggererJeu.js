@@ -11,21 +11,23 @@ export default async function handler(req, res) {
 
     let infoJeu = {
         nom: nomSaisi,
-        joueurs: "N/A", duree: "N/A", age: "N/A", difficulte: "N/A", genre: "Stratégie",
+        joueurs: "2 à 4 joueurs", duree: "60 min", age: "10+ ans", difficulte: "2/5", genre: "Stratégie",
         description: "Un jeu passionnant à découvrir en association !"
     };
 
     try {
-        // 1. Appel à l'IA pour obtenir les stats propres et le vrai nom du jeu
-        const prompt = `Tu es un expert en jeux de société. Pour le jeu "${nomSaisi}", réponds UNIQUEMENT au format JSON avec exactement ces clés : 
-        - "nom": le vrai nom officiel et complet du jeu (ex: "7 Wonders" ou "Catan"), 
+        const prompt = `Tu es un expert en jeux de société. Nous sommes en l'an 2026. Pour le jeu "${nomSaisi}" (corrige les éventuelles fautes de frappe ou minuscules) :
+        1. Vérifie si le jeu est déjà sorti ou s'il s'agit d'un jeu à venir / en précommande / participatif (Kickstarter).
+        2. Réponds UNIQUEMENT au format JSON strict avec exactement ces clés : 
+        - "nom": le vrai nom officiel et complet du jeu, 
         - "joueurs": ex "2 à 4 joueurs", 
         - "duree": ex "45 min", 
         - "age": ex "10+ ans", 
         - "difficulte": ex "2.5/5", 
         - "genre": un seul mot descriptif,
-        - "description": une courte description accrocheuse du jeu en 2 phrases maximum.
-        Ne génère aucun autre texte que le JSON.`;
+        - "description": Si le jeu n'est PAS ENCORE sorti, commence obligatoirement la description par une mention claire de sa date de sortie (ex: "⚠️ Sortie prévue en [Mois/Année]"). Ensuite, ajoute une courte description accrocheuse en 2 phrases maximum. S'il est déjà sorti, fais simplement la description normale sans mention de date.
+        
+        N'ajoute aucun markdown, aucun texte avant ou après, seulement le JSON brut.`;
         
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
@@ -38,7 +40,11 @@ export default async function handler(req, res) {
 
         if (geminiRes.ok) {
             const geminiData = await geminiRes.json();
-            const jsonText = geminiData.candidates[0].content.parts[0].text;
+            let jsonText = geminiData.candidates[0].content.parts[0].text;
+            
+            // Nettoyage des balises markdown si l'IA en rajoute
+            jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+            
             const stats = JSON.parse(jsonText);
             
             infoJeu.nom = stats.nom || nomSaisi;
@@ -50,7 +56,7 @@ export default async function handler(req, res) {
             infoJeu.description = stats.description || "Un super jeu à tester !";
         }
 
-        // 2. VÉRIFICATION ANTI-DOUBLON DANS NOTION
+        // VÉRIFICATION ANTI-DOUBLON DANS NOTION
         const checkRes = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
             method: 'POST',
             headers: {
@@ -70,11 +76,10 @@ export default async function handler(req, res) {
 
         const checkData = await checkRes.json();
         if (checkData.results && checkData.results.length > 0) {
-            // Le jeu existe déjà ! On stoppe tout et on prévient le front-end
             return res.status(409).json({ error: "Ce jeu est déjà dans la liste !" });
         }
 
-        // 3. ENREGISTREMENT DANS NOTION (si le jeu n'existe pas)
+        // ENREGISTREMENT DANS NOTION
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
