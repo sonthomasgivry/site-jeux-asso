@@ -63,7 +63,7 @@ function afficherJeux(jeux) {
         
         const nom = jeu.properties['Nom']?.title[0]?.plain_text || 'Jeu inconnu';
         const description = jeu.properties['Description']?.rich_text[0]?.plain_text || '';
-        const imageURL = jeu.properties['Image']?.url || ''; // S'affiche si tu as ajouté une image dans Notion
+        const imageURL = jeu.properties['Image']?.url || ''; 
         const joueurs = jeu.properties['Joueurs']?.rich_text[0]?.plain_text || 'N/A';
         const duree = jeu.properties['Durée']?.rich_text[0]?.plain_text || 'N/A';
         const age = jeu.properties['Âge']?.rich_text[0]?.plain_text || 'N/A';
@@ -76,12 +76,15 @@ function afficherJeux(jeux) {
         const article = document.createElement('article');
         article.className = 'carte-jeu';
 
-        // Si tu as ajouté manuellement une image dans Notion, elle s'affiche en haut de la carte
         let elementVisuel = '';
         if (imageURL) {
-            // object-fit: contain affiche toute l'image en entier, avec un fond propre
             elementVisuel = `<img src="${imageURL}" alt="${nom}" style="width: 100%; height: 180px; object-fit: contain; background-color: #f8fafc; border-top-left-radius: 8px; border-top-right-radius: 8px;">`;
         }
+
+        // Style dynamique du bouton selon si on a déjà voté ou non
+        const styleBouton = dejaVote 
+            ? 'background-color: #d1e7dd; border-color: #badbcc; color: #0f5132;' 
+            : 'background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;';
 
         article.innerHTML = `
             ${elementVisuel}
@@ -94,7 +97,7 @@ function afficherJeux(jeux) {
                 <p class="details" style="margin-bottom: 5px; font-size: 13px;">👥 ${joueurs} | ⏳ ${duree}</p>
                 <p class="details" style="font-size: 13px; margin-bottom: 15px;">👶 ${age} | 🧠 Diff: ${difficulte}</p>
                 
-                <button class="btn-vote" data-id="${idPage}" data-votes="${votes}" ${dejaVote ? 'disabled style="background-color: #d1e7dd; border-color: #badbcc; color: #0f5132; cursor: not-allowed;"' : ''}>
+                <button class="btn-vote" data-id="${idPage}" data-votes="${votes}" style="cursor: pointer; padding: 8px 16px; border-radius: 6px; font-weight: bold; width: 100%; transition: all 0.2s; ${styleBouton}">
                     ▲ ${dejaVote ? 'Déjà voté' : 'Pour'} <span class="compteur">${votes}</span>
                 </button>
             </div>
@@ -105,27 +108,44 @@ function afficherJeux(jeux) {
     activerBoutonsVote();
 }
 
-// --- 4. GESTION DES VOTES (Anti-spam) ---
+// --- 4. GESTION DES VOTES (Ajout / Retrait réversible) ---
 function activerBoutonsVote() {
     document.querySelectorAll('.btn-vote').forEach(bouton => {
-        if (bouton.disabled) return;
-
         bouton.addEventListener('click', async function() {
-            this.disabled = true;
-
             const idPage = this.getAttribute('data-id');
             let votesActuels = parseInt(this.getAttribute('data-votes'));
-            let nouveauxVotes = votesActuels + 1;
+            
+            let jeuxVotes = JSON.parse(localStorage.getItem('jeux_votes_association') || '[]');
+            let dejaVote = jeuxVotes.includes(idPage);
 
-            this.innerHTML = `▲ Déjà voté <span class="compteur">${nouveauxVotes}</span>`;
-            this.style.backgroundColor = '#d1e7dd';
-            this.style.color = '#0f5132';
-            this.style.cursor = 'not-allowed';
+            let nouveauxVotes;
 
-            const jeuxVotes = JSON.parse(localStorage.getItem('jeux_votes_association') || '[]');
-            if (!jeuxVotes.includes(idPage)) {
-                jeuxVotes.push(idPage);
-                localStorage.setItem('jeux_votes_association', JSON.stringify(jeuxVotes));
+            if (dejaVote) {
+                // Si on a déjà voté, un clic annule le vote
+                nouveauxVotes = Math.max(0, votesActuels - 1);
+                jeuxVotes = jeuxVotes.filter(id => id !== idPage); // Retire l'ID du stockage local
+            } else {
+                // Sinon, on ajoute le vote
+                nouveauxVotes = votesActuels + 1;
+                jeuxVotes.push(idPage); // Ajoute l'ID au stockage local
+            }
+
+            // Met à jour la liste dans le navigateur
+            localStorage.setItem('jeux_votes_association', JSON.stringify(jeuxVotes));
+
+            // Mise à jour visuelle immédiate du bouton
+            const nouveauDejaVote = jeuxVotes.includes(idPage);
+            this.setAttribute('data-votes', nouveauxVotes);
+            this.innerHTML = `▲ ${nouveauDejaVote ? 'Déjà voté' : 'Pour'} <span class="compteur">${nouveauxVotes}</span>`;
+            
+            if (nouveauDejaVote) {
+                this.style.backgroundColor = '#d1e7dd';
+                this.style.borderColor = '#badbcc';
+                this.style.color = '#0f5132';
+            } else {
+                this.style.backgroundColor = '#f1f5f9';
+                this.style.borderColor = '#cbd5e1';
+                this.style.color = '#334155';
             }
 
             try {
@@ -135,6 +155,7 @@ function activerBoutonsVote() {
                     body: JSON.stringify({ pageId: idPage, nouveauxVotes: nouveauxVotes })
                 });
                 
+                // Rafraîchissement discret pour trier la liste selon le nouveau score
                 setTimeout(chargerJeux, 500);
             } catch (e) {
                 console.error("Erreur vote :", e);
