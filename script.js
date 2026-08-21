@@ -1,23 +1,11 @@
-// --- 1. CHARGEMENT DES JEUX ---
+// --- 1. CHARGEMENT DES JEUX (au démarrage) ---
 async function chargerJeux() {
-    const main = document.querySelector('main');
-    main.innerHTML = '<p style="text-align: center; width: 100%; color: #666;">⏳ Chargement des jeux suggérés...</p>';
-    
     try {
-        const reponse = await fetch('/api/getJeux');
-        if (!reponse.ok) throw new Error("Erreur réseau API getJeux");
-        
-        const jeux = await reponse.json();
-        
-        if (!Array.isArray(jeux) || jeux.length === 0) {
-            main.innerHTML = '<p style="text-align:center; width: 100%; padding: 20px;">Aucun jeu pour le moment. Fais une suggestion !</p>';
-            return;
-        }
-        
+        const res = await fetch('/api/getJeux');
+        const jeux = await res.json();
         afficherJeux(jeux);
-    } catch (erreur) {
-        console.error("Erreur lors du chargement des jeux", erreur);
-        main.innerHTML = '<p style="text-align:center; width: 100%; padding: 20px; color: red;">Erreur de chargement des jeux depuis Notion.</p>';
+    } catch (e) {
+        console.error("Erreur chargement jeux", e);
     }
 }
 
@@ -41,7 +29,6 @@ function afficherJeux(jeux) {
         const genre = jeu.properties['Genre']?.multi_select[0]?.name || 'Général';
         const votes = jeu.properties['Votes']?.number || 0;
 
-        // Est-ce que l'utilisateur a déjà voté pour ce jeu ?
         const dejaVote = jeuxVotes.includes(idPage);
 
         const article = document.createElement('article');
@@ -64,11 +51,10 @@ function afficherJeux(jeux) {
     activerBoutonsVote();
 }
 
-// --- 3. GESTION DES VOTES ---
+// --- 3. GESTION DES VOTES & ANTI-SPAM ---
 function activerBoutonsVote() {
     const boutonsVote = document.querySelectorAll('.btn-vote');
     boutonsVote.forEach(bouton => {
-        // On évite d'ajouter un écouteur si le bouton est déjà désactivé
         if (bouton.disabled) return;
 
         bouton.addEventListener('click', async function() {
@@ -100,7 +86,7 @@ function activerBoutonsVote() {
                     body: JSON.stringify({ pageId: idPage, nouveauxVotes: nouveauxVotes })
                 });
                 
-                // Petit rechargement discret pour trier la liste en direct selon le nouveau score !
+                // Rechargement discret pour trier la liste selon le nouveau score
                 setTimeout(() => {
                     chargerJeux();
                 }, 500);
@@ -112,42 +98,5 @@ function activerBoutonsVote() {
     });
 }
 
-// --- 4. GESTION DU BOUTON SUGGÉRER ---
-const btnSuggerer = document.getElementById('btn-suggerer');
-const inputRecherche = document.getElementById('recherche-jeu');
-
-if (btnSuggerer && inputRecherche) {
-    btnSuggerer.addEventListener('click', async () => {
-        const nomSaisi = inputRecherche.value.trim();
-        if (!nomSaisi) return;
-
-        btnSuggerer.disabled = true;
-        btnSuggerer.innerText = 'Création par l\'IA...';
-
-        try {
-            const reponse = await fetch('/api/suggererJeu', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nom: nomSaisi })
-            });
-
-            if (reponse.ok) {
-                inputRecherche.value = '';
-                await chargerJeux(); // Recharge la grille avec le nouveau jeu
-            } else {
-                const errData = await reponse.json();
-                alert("Erreur Serveur : " + (errData.error || "Problème inconnu"));
-            }
-        } catch (err) {
-            // Affichage de la VRAIE erreur pour qu'on sache enfin ce qui bloque
-            alert("Erreur de communication : " + err.message);
-            console.error("Détails du crash de connexion :", err);
-        } finally {
-            btnSuggerer.disabled = false;
-            btnSuggerer.innerText = 'Suggérer';
-        }
-    });
-}
-
-// --- 5. LANCEMENT AU DÉMARRAGE ---
-chargerJeux();
+// Lancement au chargement de la page
+document.addEventListener('DOMContentLoaded', chargerJeux);
