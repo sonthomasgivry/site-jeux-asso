@@ -33,10 +33,15 @@ export default async function handler(req, res) {
             })
         });
 
+        // Gestion spécifique de la limite de quota (429)
+        if (geminiRes.status === 429) {
+            return res.status(429).json({ error: "L'IA a un peu trop de travail d'un coup ! Veuillez patienter une petite minute avant de réessayer." });
+        }
+
         if (!geminiRes.ok) {
             const errText = await geminiRes.text();
             console.error("❌ Erreur API Gemini :", errText);
-            return res.status(500).json({ error: "Erreur de l'intelligence artificielle (quota ou clé invalide)." });
+            return res.status(500).json({ error: "Erreur de l'intelligence artificielle." });
         }
 
         const geminiData = await geminiRes.json();
