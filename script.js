@@ -22,10 +22,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (res.ok) {
                     input.value = '';
-                    chargerJeux(); // Recharge la liste des jeux
+                    chargerJeux(); 
                 } else if (res.status === 409) {
                     alert("Ce jeu est déjà présent dans la liste des suggestions ! Vous pouvez voter pour lui directement.");
                     input.value = '';
+                } else if (res.status === 429) {
+                    alert("L'IA fait une petite pause (limite de requêtes atteinte). Patientez 1 minute et réessayez !");
                 } else {
                     alert("Erreur lors de l'ajout du jeu.");
                 }
