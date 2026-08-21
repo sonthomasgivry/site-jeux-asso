@@ -9,8 +9,19 @@ export default async function handler(req, res) {
 
     const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY } = process.env;
 
+    // Valeurs par défaut de secours si l'IA est fatiguée ou en quota dépassé
+    let infoJeu = {
+        nom: nomSaisi,
+        joueurs: "2 à 4 joueurs",
+        duree: "60 min",
+        age: "10+ ans",
+        difficulte: "2/5",
+        genre: "Stratégie",
+        description: "Un jeu passionnant à découvrir en association !"
+    };
+
     try {
-        // 1. APPEL À L'IA (GEMINI)
+        // 1. APPEL À L'IA (GEMINI) - Optionnel et sécurisé
         const prompt = `Tu es un expert en jeux de société. Nous sommes en l'an 2026. Pour le jeu "${nomSaisi}" (corrige les éventuelles fautes de frappe ou minuscules) :
         1. Vérifie si le jeu est déjà sorti ou s'il s'agit d'un jeu à venir / en précommande / participatif (Kickstarter).
         2. Réponds UNIQUEMENT au format JSON strict avec exactement ces clés : 
@@ -33,35 +44,31 @@ export default async function handler(req, res) {
             })
         });
 
-        // Gestion spécifique de la limite de quota (429)
-        if (geminiRes.status === 429) {
-            return res.status(429).json({ error: "L'IA a un peu trop de travail d'un coup ! Veuillez patienter une petite minute avant de réessayer." });
+        if (geminiRes.ok) {
+            const geminiData = await geminiRes.json();
+            let jsonText = geminiData.candidates[0].content.parts[0].text;
+            
+            // Nettoyage des balises markdown si l'IA en rajoute
+            jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+            
+            const stats = JSON.parse(jsonText);
+            
+            infoJeu.nom = stats.nom || nomSaisi;
+            infoJeu.joueurs = stats.joueurs || "2 à 4 joueurs";
+            infoJeu.duree = stats.duree || "60 min";
+            infoJeu.age = stats.age || "10+ ans";
+            infoJeu.difficulte = stats.difficulte || "2/5";
+            infoJeu.genre = stats.genre || "Stratégie";
+            infoJeu.description = stats.description || "Un super jeu à tester !";
+            console.log("✅ Stats IA récupérées avec succès");
+        } else {
+            console.warn("⚠️ L'IA a échoué (quota ou autre), passage automatique en mode secours.");
         }
+    } catch (e) {
+        console.warn("⚠️ Erreur lors de l'appel IA, passage en mode secours :", e);
+    }
 
-        if (!geminiRes.ok) {
-            const errText = await geminiRes.text();
-            console.error("❌ Erreur API Gemini :", errText);
-            return res.status(500).json({ error: "Erreur de l'intelligence artificielle." });
-        }
-
-        const geminiData = await geminiRes.json();
-        let jsonText = geminiData.candidates[0].content.parts[0].text;
-        
-        // Nettoyage des balises markdown si l'IA en rajoute
-        jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-        
-        const stats = JSON.parse(jsonText);
-        
-        let infoJeu = {
-            nom: stats.nom || nomSaisi,
-            joueurs: stats.joueurs || "N/A",
-            duree: stats.duree || "N/A",
-            age: stats.age || "N/A",
-            difficulte: stats.difficulte || "N/A",
-            genre: stats.genre || "Stratégie",
-            description: stats.description || "Un super jeu à tester !"
-        };
-
+    try {
         // 2. VÉRIFICATION ANTI-DOUBLON DANS NOTION
         const checkRes = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
             method: 'POST',
@@ -85,7 +92,7 @@ export default async function handler(req, res) {
             return res.status(409).json({ error: "Ce jeu est déjà dans la liste !" });
         }
 
-        // 3. ENREGISTREMENT DANS NOTION
+        // 3. ENREGISTREMENT DANS NOTION (que l'IA ait répondu ou non)
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -110,9 +117,10 @@ export default async function handler(req, res) {
 
         if (!notionRes.ok) throw new Error("Erreur Notion");
         
+        console.log("✅ Enregistrement Notion réussi !");
         return res.status(200).json({ success: true });
     } catch (error) {
-        console.error("❌ Erreur serveur :", error);
+        console.error("❌ Erreur serveur Notion :", error);
         return res.status(500).json({ error: "Erreur interne du serveur" });
     }
 }
