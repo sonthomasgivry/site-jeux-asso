@@ -79,7 +79,8 @@ function afficherJeux(jeux) {
         // Si tu as ajouté manuellement une image dans Notion, elle s'affiche en haut de la carte
         let elementVisuel = '';
         if (imageURL) {
-            elementVisuel = `<img src="${imageURL}" alt="${nom}" style="width: 100%; height: 180px; object-fit: cover; border-top-left-radius: 8px; border-top-right-radius: 8px;">`;
+            // object-fit: contain affiche toute l'image en entier, avec un fond propre
+            elementVisuel = `<img src="${imageURL}" alt="${nom}" style="width: 100%; height: 180px; object-fit: contain; background-color: #f8fafc; border-top-left-radius: 8px; border-top-right-radius: 8px;">`;
         }
 
         article.innerHTML = `
