@@ -9,13 +9,8 @@ export default async function handler(req, res) {
 
     const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY } = process.env;
 
-    let infoJeu = {
-        nom: nomSaisi,
-        joueurs: "2 à 4 joueurs", duree: "60 min", age: "10+ ans", difficulte: "2/5", genre: "Stratégie",
-        description: "Un jeu passionnant à découvrir en association !"
-    };
-
     try {
+        // 1. APPEL À L'IA (GEMINI)
         const prompt = `Tu es un expert en jeux de société. Nous sommes en l'an 2026. Pour le jeu "${nomSaisi}" (corrige les éventuelles fautes de frappe ou minuscules) :
         1. Vérifie si le jeu est déjà sorti ou s'il s'agit d'un jeu à venir / en précommande / participatif (Kickstarter).
         2. Réponds UNIQUEMENT au format JSON strict avec exactement ces clés : 
@@ -38,25 +33,31 @@ export default async function handler(req, res) {
             })
         });
 
-        if (geminiRes.ok) {
-            const geminiData = await geminiRes.json();
-            let jsonText = geminiData.candidates[0].content.parts[0].text;
-            
-            // Nettoyage des balises markdown si l'IA en rajoute
-            jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-            
-            const stats = JSON.parse(jsonText);
-            
-            infoJeu.nom = stats.nom || nomSaisi;
-            infoJeu.joueurs = stats.joueurs || "N/A";
-            infoJeu.duree = stats.duree || "N/A";
-            infoJeu.age = stats.age || "N/A";
-            infoJeu.difficulte = stats.difficulte || "N/A";
-            infoJeu.genre = stats.genre || "Stratégie";
-            infoJeu.description = stats.description || "Un super jeu à tester !";
+        if (!geminiRes.ok) {
+            const errText = await geminiRes.text();
+            console.error("❌ Erreur API Gemini :", errText);
+            return res.status(500).json({ error: "Erreur de l'intelligence artificielle (quota ou clé invalide)." });
         }
 
-        // VÉRIFICATION ANTI-DOUBLON DANS NOTION
+        const geminiData = await geminiRes.json();
+        let jsonText = geminiData.candidates[0].content.parts[0].text;
+        
+        // Nettoyage des balises markdown si l'IA en rajoute
+        jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        const stats = JSON.parse(jsonText);
+        
+        let infoJeu = {
+            nom: stats.nom || nomSaisi,
+            joueurs: stats.joueurs || "N/A",
+            duree: stats.duree || "N/A",
+            age: stats.age || "N/A",
+            difficulte: stats.difficulte || "N/A",
+            genre: stats.genre || "Stratégie",
+            description: stats.description || "Un super jeu à tester !"
+        };
+
+        // 2. VÉRIFICATION ANTI-DOUBLON DANS NOTION
         const checkRes = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
             method: 'POST',
             headers: {
@@ -79,7 +80,7 @@ export default async function handler(req, res) {
             return res.status(409).json({ error: "Ce jeu est déjà dans la liste !" });
         }
 
-        // ENREGISTREMENT DANS NOTION
+        // 3. ENREGISTREMENT DANS NOTION
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -107,6 +108,6 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true });
     } catch (error) {
         console.error("❌ Erreur serveur :", error);
-        return res.status(500).json({ error: "Erreur interne" });
+        return res.status(500).json({ error: "Erreur interne du serveur" });
     }
 }
