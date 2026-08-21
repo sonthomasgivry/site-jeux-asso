@@ -2,6 +2,9 @@
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
     
+    // LE MOUCHARD : Permet de voir dans les logs Vercel si le site arrive bien à contacter ce fichier
+    console.log("🚀 Requête reçue pour le jeu :", req.body?.nom);
+
     const { nom: nomSaisi } = req.body;
     if (!nomSaisi) return res.status(400).json({ error: "Nom manquant" });
 
@@ -16,14 +19,14 @@ export default async function handler(req, res) {
 
     try {
         // 1. APPEL À L'IA (GEMINI) POUR LES STATISTIQUES
-        const prompt = `Donne les informations exactes du jeu de société "${nomSaisi}". Réponds UNIQUEMENT au format JSON avec exactement ces clés : "nom" (vrai nom complet du jeu), "joueurs" (ex: "2-4 joueurs"), "duree" (ex: "45 min"), "age" (ex: "10+ ans"), "difficulte" (note de complexité sur 5, ex: "2.5/5"), "genre" (un seul mot descriptif). Ne génère aucun autre texte.`;
+        const prompt = `Donne les informations exactes du jeu de société "${nomSaisi}". Réponds UNIQUEMENT au format JSON avec exactement ces clés : "nom" (vrai nom complet du jeu), "joueurs" (ex: "2 à 4 joueurs"), "duree" (ex: "45 min"), "age" (ex: "10+ ans"), "difficulte" (note de complexité sur 5, ex: "2.5/5"), "genre" (un seul mot descriptif). Ne génère aucun autre texte.`;
         
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { response_mime_type: "application/json" }
+                generationConfig: { responseMimeType: "application/json" }
             })
         });
 
@@ -38,24 +41,30 @@ export default async function handler(req, res) {
             infoJeu.age = stats.age || "N/A";
             infoJeu.difficulte = stats.difficulte || "N/A";
             infoJeu.genre = stats.genre || "Stratégie";
+            console.log("✅ Stats IA récupérées avec succès");
+        } else {
+            console.error("❌ Erreur API Gemini :", await geminiRes.text());
         }
     } catch (e) {
-        console.error("Erreur IA Gemini", e);
+        console.error("❌ Crash dans le bloc Gemini :", e);
     }
 
     try {
         // 2. APPEL À GOOGLE IMAGES POUR LA BOÎTE DU JEU
-        const rechercheImage = encodeURIComponent(`${infoJeu.nom} jeu de société boite`);
+        const rechercheImage = encodeURIComponent(`${infoJeu.nom} jeu de societe boite`);
         const searchRes = await fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${rechercheImage}&searchType=image&num=1`);
         
         if (searchRes.ok) {
             const searchData = await searchRes.json();
             if (searchData.items && searchData.items.length > 0) {
                 infoJeu.image = searchData.items[0].link;
+                console.log("✅ Image Google récupérée avec succès");
             }
+        } else {
+             console.error("❌ Erreur Google Image :", await searchRes.text());
         }
     } catch (e) {
-        console.error("Erreur Google Image", e);
+        console.error("❌ Crash Google Image :", e);
     }
 
     try {
@@ -82,9 +91,16 @@ export default async function handler(req, res) {
             })
         });
 
-        if (!notionRes.ok) throw new Error("Erreur Notion");
+        if (!notionRes.ok) {
+            const errNotion = await notionRes.text();
+            console.error("❌ Erreur Notion :", errNotion);
+            throw new Error("Notion a refusé l'enregistrement");
+        }
+        
+        console.log("✅ Enregistrement Notion réussi !");
         return res.status(200).json({ success: true });
     } catch (error) {
+        console.error("❌ Crash final Notion :", error);
         return res.status(500).json({ error: "Erreur enregistrement Notion" });
     }
 }
