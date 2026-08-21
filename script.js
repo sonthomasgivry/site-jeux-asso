@@ -1,3 +1,94 @@
+// --- 1. CHARGEMENT DES JEUX ---
+async function chargerJeux() {
+    const main = document.querySelector('main');
+    main.innerHTML = '<p style="text-align: center; width: 100%; color: #666;">⏳ Chargement des jeux suggérés...</p>';
+    
+    try {
+        const reponse = await fetch('/api/getJeux');
+        if (!reponse.ok) throw new Error("Erreur réseau API getJeux");
+        
+        const jeux = await reponse.json();
+        
+        if (!Array.isArray(jeux) || jeux.length === 0) {
+            main.innerHTML = '<p style="text-align:center; width: 100%; padding: 20px;">Aucun jeu pour le moment. Fais une suggestion !</p>';
+            return;
+        }
+        
+        afficherJeux(jeux);
+    } catch (erreur) {
+        console.error("Erreur lors du chargement des jeux", erreur);
+        main.innerHTML = '<p style="text-align:center; width: 100%; padding: 20px; color: red;">Erreur de chargement des jeux depuis Notion.</p>';
+    }
+}
+
+// --- 2. AFFICHAGE DES CARTES ---
+function afficherJeux(jeux) {
+    const main = document.querySelector('main');
+    main.innerHTML = ''; 
+
+    jeux.forEach(jeu => {
+        const idPage = jeu.id; 
+        
+        const nom = jeu.properties['Nom']?.title[0]?.plain_text || 'Jeu inconnu';
+        const image = jeu.properties['Image']?.url || 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop';
+        const joueurs = jeu.properties['Joueurs']?.rich_text[0]?.plain_text || 'N/A';
+        const duree = jeu.properties['Durée']?.rich_text[0]?.plain_text || 'N/A';
+        const age = jeu.properties['Âge']?.rich_text[0]?.plain_text || 'N/A';
+        const difficulte = jeu.properties['Difficulté']?.rich_text[0]?.plain_text || 'N/A';
+        const genre = jeu.properties['Genre']?.multi_select[0]?.name || 'Général';
+        const votes = jeu.properties['Votes']?.number || 0;
+
+        const article = document.createElement('article');
+        article.className = 'carte-jeu';
+        article.innerHTML = `
+            <img src="${image}" alt="${nom}" class="image-jeu" onerror="this.src='https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop'">
+            <div class="contenu-carte">
+                <span style="background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #475569;">${genre}</span>
+                <h2 style="margin-top: 10px; margin-bottom: 5px;">${nom}</h2>
+                <p class="details" style="margin-bottom: 5px;">👥 ${joueurs} | ⏳ ${duree}</p>
+                <p class="details">👶 ${age} | 🧠 Diff: ${difficulte}</p>
+                <button class="btn-vote" data-id="${idPage}" data-votes="${votes}">
+                    ▲ Pour <span class="compteur">${votes}</span>
+                </button>
+            </div>
+        `;
+        main.appendChild(article);
+    });
+
+    activerBoutonsVote();
+}
+
+// --- 3. GESTION DES VOTES ---
+function activerBoutonsVote() {
+    const boutonsVote = document.querySelectorAll('.btn-vote');
+    boutonsVote.forEach(bouton => {
+        bouton.addEventListener('click', async function() {
+            if (this.disabled) return;
+            this.disabled = true;
+
+            const idPage = this.getAttribute('data-id');
+            let votesActuels = parseInt(this.getAttribute('data-votes'));
+            let nouveauxVotes = votesActuels + 1;
+
+            this.querySelector('.compteur').innerText = nouveauxVotes;
+            this.setAttribute('data-votes', nouveauxVotes);
+            this.style.backgroundColor = '#d1e7dd';
+            this.style.borderColor = '#badbcc';
+            this.style.color = '#0f5132';
+
+            try {
+                await fetch('/api/ajouterVote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pageId: idPage, nouveauxVotes: nouveauxVotes })
+                });
+            } catch (erreur) {
+                console.error("Erreur d'enregistrement du vote", erreur);
+            }
+        });
+    });
+}
+
 // --- 4. GESTION DU BOUTON SUGGÉRER ---
 const btnSuggerer = document.getElementById('btn-suggerer');
 const inputRecherche = document.getElementById('recherche-jeu');
@@ -8,10 +99,9 @@ if (btnSuggerer && inputRecherche) {
         if (!nomSaisi) return;
 
         btnSuggerer.disabled = true;
-        btnSuggerer.innerText = 'Création par l\'IA en cours...';
+        btnSuggerer.innerText = 'Création par l\'IA...';
 
         try {
-            // On envoie juste le nom tapé au serveur Vercel. Il s'occupe de tout le reste !
             const reponse = await fetch('/api/suggererJeu', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -20,15 +110,21 @@ if (btnSuggerer && inputRecherche) {
 
             if (reponse.ok) {
                 inputRecherche.value = '';
-                await chargerJeux(); // On recharge la grille
+                await chargerJeux(); // Recharge la grille avec le nouveau jeu
             } else {
-                alert("Erreur lors de la création du jeu.");
+                const errData = await reponse.json();
+                alert("Erreur Serveur : " + (errData.error || "Problème inconnu"));
             }
         } catch (err) {
-            alert("Erreur de connexion au serveur.");
+            // Affichage de la VRAIE erreur pour qu'on sache enfin ce qui bloque
+            alert("Erreur de communication : " + err.message);
+            console.error("Détails du crash de connexion :", err);
         } finally {
             btnSuggerer.disabled = false;
             btnSuggerer.innerText = 'Suggérer';
         }
     });
 }
+
+// --- 5. LANCEMENT AU DÉMARRAGE ---
+chargerJeux();
