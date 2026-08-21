@@ -76,9 +76,16 @@ function afficherJeux(jeux) {
         const article = document.createElement('article');
         article.className = 'carte-jeu';
 
+       // Conteneur visuel fixe de 180px pour toutes les cartes (avec image ou espace vide)
         let elementVisuel = '';
         if (imageURL) {
-            elementVisuel = `<img src="${imageURL}" alt="${nom}" style="width: 100%; height: 180px; object-fit: contain; background-color: #f8fafc; border-top-left-radius: 8px; border-top-right-radius: 8px;">`;
+            elementVisuel = `
+                <div style="width: 100%; height: 180px; background-color: #f8fafc; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                    <img src="${imageURL}" alt="${nom}" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>`;
+        } else {
+            elementVisuel = `
+                <div style="width: 100%; height: 180px; background-color: #f8fafc; border-top-left-radius: 8px; border-top-right-radius: 8px; flex-shrink: 0;"></div>`;
         }
 
         // Style dynamique du bouton selon si on a déjà voté ou non
