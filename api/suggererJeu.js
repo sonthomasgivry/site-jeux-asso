@@ -9,8 +9,8 @@ module.exports = async function handler(req, res) {
 
     const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY } = process.env;
 
-    // Message de secours personnalisé quand l'IA fatigue ou atteint son quota
-    const messageSecoursIA = "Notre IA ne veut plus travailler, nous mettrons a jour cette carte prochainement pour qu'elle affiche de bonnes informations, en attendant vous pouvez tout de même voter pour ce jeu.";
+    // Message personnalisé avec Robot Serval
+    const messageRobotServal = "Robot Serval fait la sieste, nous mettrons a jour cette carte prochainement pour qu'elle affiche de bonnes informations, en attendant vous pouvez tout de même voter pour ce jeu.";
 
     let infoJeu = {
         nom: nomSaisi,
@@ -19,11 +19,10 @@ module.exports = async function handler(req, res) {
         age: "10+ ans",
         difficulte: "2/5",
         genre: "Stratégie",
-        description: messageSecoursIA
+        description: messageRobotServal
     };
 
     try {
-        // 1. APPEL À L'IA (GEMINI) - Optionnel et sécurisé
         const prompt = `Tu es un expert en jeux de société. Nous sommes en l'an 2026. Pour le jeu "${nomSaisi}" (corrige les éventuelles fautes de frappe ou minuscules) :
         1. Vérifie si le jeu est déjà sorti ou s'il s'agit d'un jeu à venir / en précommande / participatif (Kickstarter).
         2. Réponds UNIQUEMENT au format JSON strict avec exactement ces clés : 
@@ -49,10 +48,7 @@ module.exports = async function handler(req, res) {
         if (geminiRes.ok) {
             const geminiData = await geminiRes.json();
             let jsonText = geminiData.candidates[0].content.parts[0].text;
-            
-            // Nettoyage des balises markdown si l'IA en rajoute
             jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-            
             const stats = JSON.parse(jsonText);
             
             infoJeu.nom = stats.nom || nomSaisi;
@@ -61,19 +57,16 @@ module.exports = async function handler(req, res) {
             infoJeu.age = stats.age || "10+ ans";
             infoJeu.difficulte = stats.difficulte || "2/5";
             infoJeu.genre = stats.genre || "Stratégie";
-            infoJeu.description = stats.description || messageSecoursIA;
-            console.log("✅ Stats IA récupérées avec succès");
+            infoJeu.description = stats.description || messageRobotServal;
         } else {
-            console.warn("⚠️ L'IA a échoué (quota ou autre), application du message de secours.");
-            infoJeu.description = messageSecoursIA;
+            infoJeu.description = messageRobotServal;
         }
     } catch (e) {
-        console.warn("⚠️ Erreur lors de l'appel IA, application du message de secours :", e);
-        infoJeu.description = messageSecoursIA;
+        infoJeu.description = messageRobotServal;
     }
 
     try {
-        // 2. VÉRIFICATION ANTI-DOUBLON DANS NOTION
+        // Vérification anti-doublon dans Notion
         const checkRes = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
             method: 'POST',
             headers: {
@@ -82,12 +75,7 @@ module.exports = async function handler(req, res) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                filter: {
-                    property: 'Nom',
-                    title: {
-                        equals: infoJeu.nom
-                    }
-                }
+                filter: { property: 'Nom', title: { equals: infoJeu.nom } }
             })
         });
 
@@ -96,7 +84,7 @@ module.exports = async function handler(req, res) {
             return res.status(409).json({ error: "Ce jeu est déjà dans la liste !" });
         }
 
-        // 3. ENREGISTREMENT DANS NOTION
+        // Enregistrement dans Notion (sans champ image, tu pourras l'ajouter directement dans Notion si tu veux)
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -114,14 +102,13 @@ module.exports = async function handler(req, res) {
                     'Âge': { rich_text: [{ text: { content: infoJeu.age } }] },
                     'Difficulté': { rich_text: [{ text: { content: infoJeu.difficulte } }] },
                     'Genre': { multi_select: [{ name: infoJeu.genre }] },
-                    'Votes': { number: 1 } 
+                    'Votes': { number: 1 }
                 }
             })
         });
 
         if (!notionRes.ok) throw new Error("Erreur Notion");
         
-        console.log("✅ Enregistrement Notion réussi !");
         return res.status(200).json({ success: true });
     } catch (error) {
         console.error("❌ Erreur serveur Notion :", error);
