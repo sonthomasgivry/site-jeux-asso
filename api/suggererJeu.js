@@ -9,15 +9,15 @@ export default async function handler(req, res) {
 
     const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY } = process.env;
 
-    // Valeurs de base en cas de secours
+    let imageFinale = "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop";
+
     let infoJeu = {
         nom: nomSaisi,
         joueurs: "N/A", duree: "N/A", age: "N/A", difficulte: "N/A", genre: "Stratégie",
-        image: "https://images.unsplash.com/photo-1610890716171-6b1bb98ffaed?q=80&w=900&auto=format&fit=crop"
+        image: imageFinale
     };
 
     try {
-        // On demande à Gemini les stats ET une vraie belle URL d'image de la boîte du jeu
         const prompt = `Tu es un expert en jeux de société. Pour le jeu "${nomSaisi}", réponds UNIQUEMENT au format JSON avec exactement ces clés : 
         - "nom": le vrai nom complet du jeu, 
         - "joueurs": ex "2 à 4 joueurs", 
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         - "age": ex "10+ ans", 
         - "difficulte": ex "2.5/5", 
         - "genre": un seul mot descriptif,
-        - "image": l'URL directe d'une image de la boîte du jeu (prends une image officielle ou de BoardGameGeek si possible, sinon une image générique propre). 
+        - "image": l'URL directe et publique d'une image de la boîte du jeu. IMPORTANT : N'utilise PAS de liens BoardGameGeek avec le suffixe __opengraph (ils bloquent l'affichage). Préfère une image Wikimedia Commons, un site marchand ou une image hébergée de manière stable se terminant par .jpg ou .png. Si tu n'es pas sûr à 100%, mets une image vide ou générique.
         Ne génère aucun autre texte que le JSON.`;
         
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
@@ -48,10 +48,12 @@ export default async function handler(req, res) {
             infoJeu.age = stats.age || "N/A";
             infoJeu.difficulte = stats.difficulte || "N/A";
             infoJeu.genre = stats.genre || "Stratégie";
-            if (stats.image && stats.image.startsWith('http')) {
+            
+            if (stats.image && stats.image.startsWith('http') && !stats.image.includes('opengraph')) {
                 infoJeu.image = stats.image;
             }
-            console.log("✅ Stats et image IA récupérées avec succès");
+            
+            console.log("✅ Stats et image IA récupérées :", infoJeu.image);
         } else {
             console.error("❌ Erreur API Gemini :", await geminiRes.text());
         }
@@ -60,7 +62,6 @@ export default async function handler(req, res) {
     }
 
     try {
-        // ENVOI FINAL À NOTION
         const notionRes = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
