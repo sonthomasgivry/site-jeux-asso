@@ -8,8 +8,7 @@ export default async function handler(req, res) {
     if (!nomSaisi) return res.status(400).json({ error: "Nom manquant" });
 
     const { NOTION_SECRET, DATABASE_ID, GEMINI_API_KEY, GOOGLE_API_KEY, GOOGLE_CX } = process.env;
-// Affiche les 5 premiers caractères pour vérifier que Vercel a bien pris les nouvelles clés
-console.log("🔑 VÉRIF CLÉS - Gemini:", GEMINI_API_KEY?.substring(0, 5), "| Google:", GOOGLE_API_KEY?.substring(0, 5));
+
     let infoJeu = {
         nom: nomSaisi,
         joueurs: "N/A", duree: "N/A", age: "N/A", difficulte: "N/A", genre: "Stratégie",
@@ -17,10 +16,10 @@ console.log("🔑 VÉRIF CLÉS - Gemini:", GEMINI_API_KEY?.substring(0, 5), "| G
     };
 
     try {
-        // 1. APPEL À L'IA (GEMINI) - Correction du nom du modèle ici (gemini-1.5-flash)
+        // 1. APPEL À L'IA (GEMINI) - Utilisation du modèle mis à jour gemini-2.5-flash
         const prompt = `Donne les informations exactes du jeu de société "${nomSaisi}". Réponds UNIQUEMENT au format JSON avec exactement ces clés : "nom" (vrai nom complet du jeu), "joueurs" (ex: "2 à 4 joueurs"), "duree" (ex: "45 min"), "age" (ex: "10+ ans"), "difficulte" (note de complexité sur 5, ex: "2.5/5"), "genre" (un seul mot descriptif). Ne génère aucun autre texte.`;
         
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -90,7 +89,7 @@ console.log("🔑 VÉRIF CLÉS - Gemini:", GEMINI_API_KEY?.substring(0, 5), "| G
             })
         });
 
-        if (!notionRes.ok) {
+    if (!notionRes.ok) {
             const errNotion = await notionRes.text();
             console.error("❌ Erreur Notion :", errNotion);
             throw new Error("Notion a refusé l'enregistrement");
